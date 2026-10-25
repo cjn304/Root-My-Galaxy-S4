@@ -1,31 +1,45 @@
-# APK-side changes
+# APK-side sources
 
-Everything in this directory is derived from **phh's Superuser**: the `RequestActivity` /
-`Settings` / `SuHelper` Java sources, plus the authorization database layer
-(`activity.c`, `db.c`, `phh_su.c`).
+**English** | [简体中文](README.zh-CN.md)
 
-Original copyright headers are kept in each file.
+A partial snapshot of **phh's Superuser**, kept for reference: the prompt activities, the settings
+screen, and the socket authorization protocol that the `su` binary speaks.
+
+## This directory does not build
+
+`Android.mk` is the upstream build file, and it references sources that are not in this snapshot —
+`utils.c`, `pts.c`, `binds.c`, `sqlite3/`, `jni/`, `packageName`. It is here to show how the pieces
+fit together, not to be run.
+
+The `su` binary this project ships is `../src/su_fork.c`: an independent implementation of the same
+protocol, built with `../scripts/build_su.sh` and deployed by `../scripts/deploy_su.sh`.
 
 ## License
 
-phh's Superuser is **GPL-3.0**. This directory is a derivative and stays GPL-3.0.
+**Apache-2.0.** Every file that carries a header says so:
 
-The GPL-2.0 at the repository root covers `src/`, `kmod/`, `scripts/` and `tools/`. Only
-`kmod/` is *forced* to be GPL-2.0 (it is a kernel module); the userland parts could be relicensed.
-The two sides are separate programs — they communicate over a socket protocol rather than by
-linking — so both licenses can coexist in one repository.
+- `activity.c`, `daemon.c` — Copyright 2010 Adam Shanks, 2008 Zinx Verituse
+- `db.c` — Copyright 2013 Koushik Dutta
+- `phh_su.c`, `phh_su.h`, `su.h`, `utils.h`, `koush/su.c`, `koush/su.h` — Copyright 2015
+  Pierre-Hugues Husson, plus the above
+- `MultitaskSuRequestActivity.java`, `RequestActivity.java` — same upstream tree
 
-## Notes
+A few files carry no header in this snapshot (`Settings.java`, `SuHelper.java`,
+`SuCheckerReceiver.java`, `lsu_Shell.java`, and the two empty `koush/` placeholders); they come from
+the same upstream tree.
 
-- **The APK is not distributed here.** Either build it from these sources and sign it with
-  your own key, or install the published build:
-  https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
-- The su binary (`../src/su_fork.c`) speaks phh's socket protocol: it listens on
-  `/data/local/tmp/sud/s<pid>`, launches the prompt via `am start`, and the app replies
-  `ALLOW` / `DENY` over that socket.
-- What this project changed in that protocol: `SO_PEERCRED` accepts only the managing app's
-  uid (so no other app can connect first and forge an `ALLOW`), four-tier policy through
-  `persist.sys.root_access`, and the managing app can switch tiers over stdin.
+Apache-2.0 is **incompatible with GPL-2.0** — its patent clause has no GPL-2.0 equivalent — which is
+why this directory stays a separate program. It communicates with `su` over a socket, and nothing
+here is linked against `kmod/` or `src/`.
+
+## What this project changed in the protocol
+
+- `SO_PEERCRED` on the accepted socket: only the managing app's uid is accepted, so no other app
+  can connect first and forge an `ALLOW`
+- Four-tier policy through `persist.sys.root_access`, with `/data/local/tmp/su_access_mode` as an
+  override that takes precedence
+- ADB requests bypass the prompt in the `adb_only` and `apps_and_adb` tiers; apps always go through
+  the allowlist and the prompt
 
 ## Files
 
@@ -33,12 +47,15 @@ linking — so both licenses can coexist in one repository.
 |---|---|
 | `RequestActivity.java` | Permission prompt |
 | `MultitaskSuRequestActivity.java` | Prompt variant for multi-window |
-| `Settings.java` | Settings screen (four tiers) |
-| `SuHelper.java` | Protocol wrapper around su |
+| `Settings.java` | Settings screen (tier selection) |
+| `SuHelper.java` | Protocol wrapper |
 | `SuCheckerReceiver.java` | Root status check |
 | `lsu_Shell.java` | `libsuperuser` shell wrapper |
-| `phh_su.c` / `db.c` / `activity.c` | Native authorization library and database |
-| `daemon.c` / `hacks.c` | Daemon logic and platform shims |
-| `su.c` / `su.h` / `phh_su.h` / `utils.h` | Reference su implementation and shared headers |
-| `Android.mk` | Build file |
-| `koush/` | Koush Superuser compatibility layer |
+| `phh_su.c` | Main `su` implementation (Apache-2.0) |
+| `su.c` | Byte-identical copy of `phh_su.c`, kept because `Android.mk` names it |
+| `phh_su.h`, `su.h`, `utils.h` | Shared headers |
+| `activity.c`, `daemon.c`, `db.c` | Upstream activity / daemon / database layer |
+| `hacks.c` | Platform shims |
+| `koush/su.c`, `koush/su.h` | Koush's original implementation |
+| `koush/daemon.c`, `koush/db.c` | Empty placeholders in this snapshot |
+| `Android.mk` | Upstream build file, incomplete here (see above) |

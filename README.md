@@ -1,5 +1,7 @@
 # Root My Galaxy S4
 
+**English** | [简体中文](README.zh-CN.md)
+
 Runtime root + surgical SELinux policy patching on the Samsung Galaxy S4 (GT-I9500 / Exynos 5410).
 No boot image flashing, no recovery, no writes to `selinuxfs` — so the **KNOX Warranty Bit is never tripped**.
 
@@ -499,6 +501,7 @@ Three parts, three different reasons:
   userland programs talking to the kernel through syscalls; nothing links them against kernel
   code, so they could be MIT or Apache-2.0. They carry GPL-2.0 because that is how this repository
   is distributed, not because of a technical constraint.
-- **`su/` is GPL-3.0.** It is a derivative of phh's Superuser. GPL-3.0 is incompatible with
-  GPL-2.0-only, so the two are kept as separate programs communicating over a socket — which is
-  why this directory has its own license notice instead of sharing the root one.
+- **`su/` is Apache-2.0.** It carries code derived from phh's Superuser, which itself descends
+  from Koush's and ChainsDD's Superuser — every file there that has a header says Apache-2.0.
+  Apache-2.0 is incompatible with GPL-2.0 (the patent clause has no GPL-2.0 equivalent), so `su/`
+  stays a separate program that talks to the rest over a socket and is never linked into it.
