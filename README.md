@@ -142,10 +142,7 @@ them. The reasoning is structural: same KNOX generation, same `lkmauth` mechanis
 | SM-N900 (Note 3) | Exynos 5420 | 3.4.x | Closest match: same branch and same KNOX generation as the S4 |
 | GT-I9505 (S4 LTE) | Snapdragon 600 | 3.4.x | Same branch, different SoC — the entire kernel side is a fresh port |
 | GT-I9300 (S3) | Exynos 4412 | 3.0.x | Older branch: `task_struct` layout differs, `[B]` cannot be copied |
-| GT-N7100 (Note II) | Exynos 4412 | 3.0.x | Same situation as the S3 |
-
-Kernel lines are from the stock releases (5.0.1 / 4.3 / 4.4.2) — always confirm with
-`cat /proc/version` before trusting the row.
+| GT-N7100 (Note 2) | Exynos 4412 | 3.0.x | Same situation as the S3 |
 
 How to read it:
 
@@ -154,7 +151,7 @@ How to read it:
 - **I9505** keeps the whole userland side unchanged, but the kernel is a different tree (msm).
   Expect every `[A]` address to move; verify the exec-patch site independently rather than
   assuming the branch distance is similar.
-- **S3 / Note II** run 3.0.x. `task_struct` and `cred` are laid out differently, so `[B]` has to
+- **S3 / Note 2** run 3.0.x. `task_struct` and `cred` are laid out differently, so `[B]` has to
   be re-derived instead of copied. `lkmauth` exists from 4.3 onward, but the policy build is older
   and `perm_bit` will not match.
 
