@@ -35,6 +35,10 @@ Root prompts on the app side are handled by **phh's Superuser** — install it b
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
+Its source is not vendored here; take it from https://github.com/phhusson/Superuser if you need to
+change the APK. The `su` binary this project ships (`src/su_fork.c`) is an independent
+implementation of the same socket protocol, built from that file plus `src/sqlite3.c`.
+
 > **Tiers.** `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. `adb shell su` works
 > without a prompt in tiers 2 and 3; app requests always go through the per-app allowlist and the
 > phh prompt. Measured on this device: `0` and `1` deny uid 2000, `2` and `3` return `uid=0`.
@@ -491,7 +495,7 @@ fails, and that check exists for a reason.
 
 ## License
 
-Three parts. The terms differ because the constraints differ:
+Two parts:
 
 - **`src/`, `scripts/`, `tools/` are GPL-3.0-or-later.** They are ordinary userland programs
   talking to the kernel through syscalls; nothing links them against kernel code, so the licence
@@ -502,9 +506,9 @@ Three parts. The terms differ because the constraints differ:
   `EXPORT_SYMBOL_GPL` symbols at all. GPL-3.0 cannot be used here — it is incompatible with the
   kernel's licence. `kmod/LICENSE` carries the GPL-2.0 text, and the file header says
   `SPDX-License-Identifier: GPL-2.0`.
-- **`su/` is GPL-3.0**, matching its own `LICENSE` file from upstream. Many of its `.c` files still
-  carry Apache-2.0 headers from the ChainsDD/Koush era; Apache-2.0 is compatible with GPL-3.0
-  (GPL-3.0 has a matching patent clause), so the whole of `su/` is distributed as GPL-3.0.
 
-Every source file in `src/`, `scripts/`, `tools/` and `kmod/` starts with an
-`SPDX-License-Identifier` line, so the terms are unambiguous per file.
+Every source file here starts with an `SPDX-License-Identifier` line, so the terms are unambiguous
+per file.
+
+The APK-side code is deliberately not vendored. `su` speaks the same socket protocol as phh's
+Superuser, which is GPL-3.0 and lives at https://github.com/phhusson/Superuser.

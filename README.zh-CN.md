@@ -34,6 +34,10 @@
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
+它的源码没有收录在本仓库；需要改 APK 的话去 https://github.com/phhusson/Superuser。本项目发布的
+`su` 二进制（`src/su_fork.c`）是同一套 socket 协议的独立实现，只用这个文件和 `src/sqlite3.c`
+构建。
+
 > **四档。** `0` 全拒，`1` 只放应用，`2` 只放 ADB，`3` 应用 + ADB。`adb shell su` 在 2 和 3 两档
 > 下不弹窗直接放行；应用请求始终要走 allowlist 和 phh 弹窗。本机实测：`0` 和 `1` 拒绝 uid 2000，
 > `2` 和 `3` 返回 `uid=0`。
@@ -479,7 +483,7 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 
 ## 许可证
 
-三部分。条款不同，因为约束不同：
+两部分：
 
 - **`src/`、`scripts/`、`tools/` 是 GPL-3.0-or-later。** 它们是普通用户态程序，通过系统调用与内核
   交互；没有任何东西把它们链接进内核代码，所以这里的许可是一种选择，而不是约束。
@@ -488,9 +492,8 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
   `MODULE_LICENSE("GPL")`，这是它能解析 `EXPORT_SYMBOL_GPL` 符号的前提。这里不能用 GPL-3.0 ——
   它与内核的许可不兼容。`kmod/LICENSE` 放的是 GPL-2.0 全文，文件头写的是
   `SPDX-License-Identifier: GPL-2.0`。
-- **`su/` 是 GPL-3.0**，与它自己的上游 `LICENSE` 一致。它的许多 `.c` 文件仍带着 ChainsDD/Koush
-  时代的 Apache-2.0 头；Apache-2.0 与 GPL-3.0 兼容（GPL-3.0 有对应的专利条款），所以整个 `su/`
-  以 GPL-3.0 分发。
 
-`src/`、`scripts/`、`tools/` 和 `kmod/` 下的每个源文件都以一行 `SPDX-License-Identifier` 开头，
-所以每个文件的条款都是明确的。
+这里每个源文件都以一行 `SPDX-License-Identifier` 开头，所以每个文件的条款都是明确的。
+
+APK 侧的代码是刻意没有收录的。`su` 与 phh's Superuser 使用同一套 socket 协议，后者是 GPL-3.0，
+地址是 https://github.com/phhusson/Superuser。
