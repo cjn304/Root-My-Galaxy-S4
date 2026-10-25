@@ -1,33 +1,84 @@
 # Root My Galaxy S4
 
-> Runtime root + surgical SELinux policy patching on the Samsung Galaxy S4 (GT-I9500 / Exynos 5410) — no boot image flashing, no KNOX Warranty Bit trip.
-
-在 GT-I9500（Galaxy S4 Exynos Octa，Android 5.0.1，内核 3.4.5）上做纯运行时的 root：
-不刷 boot.img、不进 recovery、不写 `selinuxfs`，因此 **KNOX Warranty Bit 不会被翻转**。
-
-整套东西的核心不是"CVE + 提权"那一步（那是公开利用），而是后面两件麻烦事：
-
-1. **这台机器开了 `CONFIG_ALWAYS_ENFORCE`** —— `setenforce 0` 是死的，permissive 必须在内存里手工置位；
-2. **提权之后什么都不能干** —— uid 0 但仍在 `shell`/`untrusted_app` 域，写 `/system`、exec root 进程全被 AVC 拒。
-
-所以项目最终形态是：一个内核模块把 SELinux 的 `policydb` 直接在内存里改掉（8 条定向规则），
-再配一套带四档授权的 `su`。**permissive_map 最终归零，系统停在 Enforcing。**
+Runtime root + surgical SELinux policy patching on the Samsung Galaxy S4 (GT-I9500 / Exynos 5410).
+No boot image flashing, no recovery, no writes to `selinuxfs` — so the **KNOX Warranty Bit is never tripped**.
 
 ---
 
-## 状态
+## How to use
 
-| 项 | 结果 |
+### 1. Prerequisites
+
+- A GT-I9500 on `LRX22C.I9500ZSSHQD1` / kernel `3.4.5-6264821` (other builds: see [Porting](#porting-to-another-device))
+- An ARM32 cross toolchain (`arm-none-linux-gnueabihf-`)
+- `adb`, and the device reachable over USB
+- **One-time** arbitrary kernel read/write on the device. This project is the payload that runs *after* you have it — the exploit itself (CVE-2015-1805) is in `src/ktool.c` and is entered by simply running the binary.
+
+### 2. Build
+
+```sh
+./scripts/build.sh                  # toolchain on PATH
+TOOLCHAIN=/opt/arm/bin ./scripts/build.sh   # or point at it
+```
+
+Produces `src/ktool`, a static ARM32 ELF (~423 KB).
+
+### 3. Install
+
+```sh
+adb push src/ktool /data/local/tmp/ktool_new
+adb shell chmod 755 /data/local/tmp/ktool_new
+
+# Escalate + permissive, drop stale AVC verdicts, remount /system, swap the binary
+adb shell '/data/local/tmp/ktool pwn /system/bin/sh -c "
+    /system/bin/ktool flush -y 2>/dev/null;
+    mount -o rw,remount /system &&
+    cp /data/local/tmp/ktool_new /system/bin/ktool &&
+    chown root:root /system/bin/ktool &&
+    chmod 700 /system/bin/ktool &&
+    chcon u:object_r:system_file:s0 /system/bin/ktool &&
+    mount -o ro,remount /system"'
+
+# Close the permissive window — do not skip this
+adb shell su -c '/system/bin/ktool restore'
+```
+
+The `flush` is not optional in practice: `pwn` only makes *new* verdicts permissive, and
+`shell -> filesystem { remount }` is almost certainly already cached as a deny from earlier
+experiments. Without it you get `mount: Permission denied` while permissive is demonstrably on.
+
+### 4. Verify
+
+```sh
+adb shell '/system/bin/ktool target'          # addresses + offsets, must say "verified: yes"
+adb shell '/system/bin/ktool backend probe'   # real race read of init_task
+adb shell 'getenforce'                        # Enforcing
+adb shell 'su -c id'                          # uid=0, context=u:r:init_shell:s0
+```
+
+### 5. Boot persistence (optional)
+
+Install `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. It re-patches,
+`insmod`s the module, applies the avtab rules and restores Enforcing on every boot.
+
+> This file **must be LF**. Saved as CRLF, mksh aborts with `syntax error: 'do' unexpected`
+> and executes *nothing* — no patch, no module, no permissive, and `su` stops working entirely.
+
+---
+
+## Status
+
+| Item | Result |
 |---|---|
-| 任意内核读 / 写 | CVE-2015-1805（pipe iovec 越界），读写双方向 |
-| 提权 | `prepare_kernel_cred(NULL)` + 直改 `task->cred`，uid/gid/caps 全 0 |
-| SELinux 终态 | `Enforcing`，`permissive_map` = 0，无残留 permissive 三元组 |
-| 策略改动 | 内存 `te_avtab` 插入 8 条 allow 规则（不落盘、不写 selinuxfs） |
-| root 授权 | 四档：全拒 / 仅 ADB / 仅应用 / 全部；应用侧弹窗走 phh Superuser 协议 |
-| 系统可写 | `/system` 分区 remount rw → 改 → 回 ro，正常冷启动 |
-| KNOX | Warranty Bit 未翻转，`RST_STAT` 正常 |
+| Arbitrary kernel R/W | CVE-2015-1805 (pipe iovec OOB), both directions |
+| Escalation | `prepare_kernel_cred(NULL)` + direct `task->cred` overwrite; uid/gid/caps all 0 |
+| SELinux end state | `Enforcing`, `permissive_map` = 0, no leftover permissive triples |
+| Policy changes | 8 allow rules inserted into the in-memory `te_avtab`; nothing written to disk |
+| Root policy | Four tiers: deny all / ADB only / apps only / everything; app prompts via phh protocol |
+| `/system` writes | remount rw → modify → back to ro, cold boot verified |
+| KNOX | Warranty Bit intact, `RST_STAT` normal |
 
-设备指纹（本项目的验证基线）：
+Baseline device:
 
 ```
 model : GT-I9500
@@ -39,264 +90,290 @@ sepf  : SEPF_GT-I9500_5.0.1-1_0039
 
 ---
 
-## 技术链路
+## How it works
 
 ```
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ 1. 任意读                                                       │
-  │    CVE-2015-1805：pipe_read 的 iovec 越界（readv 方向）         │
-  │    → 读内核任意地址，8 字节对齐，单次上限 2000 B                │
-  └─────────────────────────────────────────────────────────────────┘
-                              │
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ 2. 任意写                                                       │
-  │    同漏洞 writev 方向。实测：kwrite() 恒返回 0，但只有 8 字节块   │
-  │    真正可靠（见下方"写原语"）→ 强制 8 字节块 + 写后读回校验       │
-  └─────────────────────────────────────────────────────────────────┘
-                              │
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ 3. 提权                                                         │
-  │    find_self() 扫 task 链表 → 改 real_cred/cred 的 uid/gid/caps  │
-  │    不走 commit_creds()：避免 security_task_fix_setuid 重算 SID   │
-  └─────────────────────────────────────────────────────────────────┘
-                              │
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ 4. 绕过 SELinux（项目的真正难点）                                │
-  │    4a. permissive_map 置位（内存 ebitmap，不碰 selinuxfs）       │
-  │    4b. avc_ss_reset(0) 清 AVC 缓存（否则旧 deny 粘着不放）        │
-  │    4c. 改 policydb 的 te_avtab，插入 8 条定向 allow              │
-  │    4d. permissive_map 归零 + 再清一次缓存 → Enforcing            │
-  └─────────────────────────────────────────────────────────────────┘
-                              │
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ 5. 授权框架                                                     │
-  │    /system/xbin/su（fork 版，phh 协议）                          │
-  │    → 守护 socket + 弹窗 + 四档策略 + 白名单                       │
-  └─────────────────────────────────────────────────────────────────┘
+1. Arbitrary read    CVE-2015-1805 pipe_read iovec OOB. 8-byte aligned, 2000 B per call.
+2. Arbitrary write   Same bug, writev direction. kwrite() ALWAYS returns 0, so every
+                     write is read back and compared; only 8-byte chunks are trusted.
+3. Escalation        Walk task list -> task->real_cred/cred -> zero uid/gid, fill caps.
+                     Deliberately avoids commit_creds() so SELinux does not recompute the SID.
+4. SELinux           a) set permissive_map (in-memory ebitmap, never selinuxfs)
+                     b) avc_ss_reset(0) — otherwise cached denies keep winning
+                     c) insert 8 allow rules into policydb->te_avtab
+                     d) clear permissive_map + flush again -> Enforcing
+5. Authorization     /system/xbin/su (fork-based, phh protocol) + Superuser APK
 ```
 
-### 写原语：为什么必须是 8 字节
+Three details that decide whether any of this works:
 
-`kwrite()` 走 iovec 越界，**无论成功与否一律返回 0**。同一长度连做 5 次独立测试的落地率：
+**`kwrite` lies about its length.** Every call returns 0 regardless of outcome. Landing rate over 5 independent tries: 8 B → 5/5, 16 B → 1/5, 32 B → 0/5, 48 B → 0/5, 72 B → 1/5. Hence fixed 8-byte chunks with read-back verification and an undo log. Slow (about 1 MB/min), but never silently half-applied.
 
-| 写入长度 | 落地次数 |
+**`setenforce 0` is dead on this kernel.** `CONFIG_ALWAYS_ENFORCE` makes `avc_denied()` return `-EACCES` without ever consulting `selinux_enforcing`. The only lever is `permissive_map`.
+
+**Permissive does not retroactively apply.** `AVD_FLAGS_PERMISSIVE` is baked into `avd->flags` at *computation* time. Any triple already cached keeps its old verdict. This is why `enforce` and `flush` call `avc_ss_reset(0)`, and why "permissive is on but remount still fails" happens.
+
+Writing `/sys/fs/selinux/load` is never done: it triggers TIMA integrity measurement (`Tl_TIMA_PKM: ret = -1`) and the process wedges in D state. All policy edits happen in memory instead.
+
+### The 8 avtab rules
+
+Type values on this policy: `untrusted_app 809`, `init_shell 986`, `shell 1178`, `shell_data_file 200`, `su_exec 161`, `system_prop 342`.
+
+```
+init_shell    -> system_prop  : property_service { set }                    # write persist.sys.root_access
+init_shell    -> untrusted_app: fd { use }                                  # hand prompt socket to the app
+untrusted_app -> init_shell   : process { sigchld }                         # app waits for su
+untrusted_app -> shell_data   : sock_file { create write setattr unlink }   # create prompt socket
+untrusted_app -> shell_data   : dir { add_name remove_name write search }
+shell         -> su_exec      : file { execute execute_no_trans }
+init_shell    -> shell        : fd { use }
+shell         -> shell_data   : sock_file { create write setattr unlink }
+```
+
+Insertion details that matter: `policydb + 0x74` is `te_avtab` (htable / nslot / mask / nel), the key is four `u16` packed into 64 bits (`cls | tgt << 2 | src << 9`), nodes are 16 bytes, and **insertion must be ordered** — `avtab_search_node()` early-breaks on an ordered list, so an out-of-order insert is silently invisible.
+
+---
+
+## ktool command reference
+
+Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry time for read/write.
+
+### Target / backend
+
+| Command | Description |
 |---|---|
-| 8 B | 5 / 5 |
-| 16 B | 1 / 5 |
-| 32 B | 0 / 5 |
-| 48 B | 0 / 5 |
-| 72 B | 1 / 5 |
+| `target` | Print matched model/build/kernel, all addresses and offsets, and the `verified` flag |
+| `backend` | Show backend name and read/write limits |
+| `backend probe` | Real race read of `init_task`; the definitive "is R/W alive" check |
+| `sym <name\|name*wild\|0xADDR> [-a] [-f mapfile] [-n max]` | Symbol lookup (`-a` = all matches, `-f` = custom System.map) |
 
-所以 `kwrite_buf()` 固定按 8 字节分块，每块写后读回比对，任何一块失败即整笔回滚（`undo` 日志）。
-代价是慢（1 MB 约 1 分钟），换来的是"绝不静默半改"。
+### Read
 
-### 为什么 `setenforce 0` 没用
+| Command | Description |
+|---|---|
+| `dump <addr> <len>` | Read and hexdump, max 4096 B |
+| `read <addr> <len>` | Read and emit raw binary to stdout, max 16 MB |
+| `kread_file <addr> <len> <out> [-r\|--resume]` | Chunked read to file; `-r` resumes from existing file size |
+| `bench [addr] [n]` | Read throughput: ms/read and average retries |
+| `selftest <addr>` | Read the same address N times and compare for stability |
 
-这台机器的内核开了 `CONFIG_ALWAYS_ENFORCE`，`avc_denied()` 里是：
+### Write
 
-```c
-if (!(avd->flags & AVD_FLAGS_PERMISSIVE))
-        return -EACCES;          /* 完全不看 selinux_enforcing */
-```
+| Command | Description |
+|---|---|
+| `kwrite_file <in> <addr> [-n]` | Chunked write with read-back verify; `-n` skips the undo log |
+| `w32 <addr> <value>` | Single 32-bit write (preserves the upper 4 bytes) |
+| `undo` | Replay the undo log to revert the last `kwrite_file` |
+| `wtest [len] [off]` | Write-primitive diagnostic: try a length and report whether it landed |
 
-`selinux_enforcing = 0` 和写 `/sys/fs/selinux/enforce` 都不改变这条路径。
-唯一有效的是把 `permissive_map`（一个 ebitmap）里的位真正置起来，且位图地址要靠符号解析拿到。
+### Search / structure
 
-### 为什么 permissive 之后还要 flush
+| Command | Description |
+|---|---|
+| `scan <start> <len> <pattern\|s:text> [max]` | Byte or string scan |
+| `scan4 <start> <len> <value\|lo-hi> [max] [-u]` | 32-bit scan, `-u` = unaligned |
+| `findcred <start> <len> [-u uid] [max]` | Find objects shaped like `struct cred` |
+| `find <comm>` | Walk the task list and match `comm` |
+| `walk <sym\|addr> <off>... [-d n]` | Follow a chain of pointers, dump the endpoint |
+| `fld <addr> <off:type>...` | Field-wise struct read; types `p u h b s x` |
+| `dis <addr> [n]` | ARM32 disassembly, conservative (unknown → `.word`) |
 
-`AVD_FLAGS_PERMISSIVE` 是在**计算**权限时烤进 `avd->flags` 的。
-一个三元组一旦被算过并缓存，之后再改 `permissive_map` 不会重算它 —— 已缓存的 deny 继续生效，
-已缓存的 allow 继续放行。所以 `enforce` / `flush` 必须调用 `avc_ss_reset(0)`。
+### Privilege
 
-这条也解释了为什么"permissive 开着却 mount 不上 /system"这种诡异现象：
-`shell -> filesystem { remount }` 的判定在 permissive 之前就被缓存了。
+| Command | Description |
+|---|---|
+| `root <cmd>` | Escalate then `exec` (aliases `x`, `rawexec`) — ends the session |
+| `promote` | Escalate but stay in the session; keeps a cred snapshot |
+| `unroot` | Restore the cred snapshot taken by `promote` (validates task/comm first) |
+| `pwn [cmd]` | Escalate + full permissive, then `exec` |
+| `sh` | Apply exec patch + switch to `init_shell`, then hand over a shell |
+| `boot <ko>` | `lkmauth_bootmode=2` + permissive + `insmod` |
+| `who` | Current uid/euid/gid/caps |
+| `caps` | Fill all capability sets on the current cred |
+| `showcred` | Dump creds of every task in the list |
 
-### 为什么改 avtab 而不是落盘策略
+### SELinux
 
-写 `/sys/fs/selinux/load` 会触发 TIMA 对内核做完整性度量（`Tl_TIMA_PKM: ret = -1`），
-进程直接卡 D 状态。所以策略改动全部在内存里做：
+| Command | Description |
+|---|---|
+| `permissive [bit]` | Set a single `permissive_map` bit (defaults to `init_shell`) |
+| `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC (aliases `unperm`, `restore`). `--noflush` does **not** actually restore enforcement |
+| `flush [-y]` | AVC flush only; `-y` skips the 3 s warning |
+| `patch` / `unpatch` | Apply / revert the KNOX `sys_execve` branch patch |
+| `setsid <sid\|init_shell> <cmd...>` | Rewrite the current `cred->security->sid`, then exec. Rescue path when the AVC cache is deadlocked |
 
-- `policydb + 0x74` = `te_avtab`（htable / nslot / mask / nel）
-- key 是 4 个 u16 拼成 64 位：`cls | tgt << 2 | src << 9`
-- 哈希 `(cls + (tgt << 2) + (src << 9)) & mask`，节点 16 字节
-- **必须有序插入** —— `avtab_search_node()` 有 early-break，乱序插入等于没插
+### File / shell
 
-落地的 8 条规则（`untrusted_app 809` / `init_shell 986` / `shell 1178` / `shell_data_file 200` / `su_exec 161` / `system_prop 342`）：
+| Command | Description |
+|---|---|
+| `cat <path>` | Escalate + permissive, then read a file |
+| `cp <src> <dst>` | Escalate + permissive, then copy |
+| `ls <path>` | Escalate + permissive, then list |
 
-```
-init_shell   -> system_prop  : property_service { set }          # 改 persist.sys.root_access
-init_shell   -> untrusted_app: fd { use }                        # 把弹窗 socket 交给 app
-untrusted_app-> init_shell   : process { sigchld }               # app 等 su 结果
-untrusted_app-> shell_data   : sock_file { create write setattr unlink }   # 建弹窗 socket
-untrusted_app-> shell_data   : dir { add_name remove_name write search }
-shell        -> su_exec      : file { execute execute_no_trans }
-init_shell   -> shell        : fd { use }
-shell        -> shell_data   : sock_file { create write setattr unlink }
-```
+### Session
 
-权限掩码按 `1 << (权限值 - 1)` 计算，已用独立的 `sepolicy_parse.py` 解析设备策略交叉核对
-（`execute(14) -> 0x2000`，`execute_no_trans(18) -> 0x20000` 等）。
+| Command | Description |
+|---|---|
+| `repl` | Interactive session (aliases `shell`, `-i`). History persists to `/data/local/tmp/.ktool_hist` |
+| `help` / `?` | Command list inside REPL |
+| `history` / `!N` | Show / replay history inside REPL |
+| `exit` / `quit` / `q` | Leave the session |
 
----
-
-## 仓库结构
-
-```
-.
-├── docs/                 55 篇分阶段技术记录（P1 PoC → P4 落地）
-│   └── README.md         文档索引，按阶段分组
-├── src/
-│   ├── ktool.c           主工具，3700+ 行，45+ 命令
-│   ├── su_fork.c         fork 版 su（phh 协议）
-│   ├── su.c              早期 su（单进程版，留作对照）
-│   ├── targets.h         机型/内核 -> 地址表
-│   ├── appwrite.c        以 app 身份写 app 私有数据
-│   ├── apprm.c           以 app 身份删文件
-│   ├── sqlite3.c/h       静态 sqlite（su 的授权库）
-│   └── poc/              69 个漏洞验证 / 探测小程序
-├── kmod/
-│   ├── ktool_mod.c       内核模块：kread/kwrite 后端、avtab 手术、门禁
-│   └── Makefile
-├── scripts/
-│   ├── build.sh          编译 ktool
-│   ├── build_su.sh       编译 su
-│   ├── deploy_su.sh      部署 su（PC 侧，走 adb）
-│   └── init.sec.boot.v9g.sh   开机自举（patch → insmod → 策略 → restore）
-├── tools/
-│   ├── sepolicy_parse.py 纯 Python policydb v26 解析器
-│   ├── sepolicy_query.py 针对性策略查询
-│   ├── avtab_query.py    avtab 查询
-│   └── avtab_walk.py     avtab 遍历
-└── su/                   配套 APK 的源码改动（phh Superuser 派生物，GPL-3.0）
-```
-
-### ktool 能干什么
-
-用户态工具，通过 CVE 拿到内核读写后提供 45+ 命令。常用的：
-
-```
-target                          打印机型/内核识别结果与地址表，确认地址对不对
-root                            提权（改 cred）
-pwn [cmd]                       提权 + 全量 permissive，然后 exec
-patch / unpatch                 改 exec 分支（让 root 进程能正常 exec）
-enforce [--noflush]             关 permissive + 清 AVC 缓存（别名 restore）
-flush                           只清 AVC 缓存
-dump <addr> <len>               读内存
-kread_file <addr> <len> <out> [-r|--resume]   大段读落盘，支持续传
-kwrite_file <in> <addr> [-n]    大段写（8 字节块 + 回滚）
-undo                            用 undo 日志还原上次写入
-scan / scan4                    字节/字符串/4 字节扫描
-findcred <start> <len>          按 cred 形状找对象
-walk <sym|addr> <off>...        指针追踪
-fld <addr> <off:type>...        按字段读结构
-dis <addr> [n]                  ARM32 反汇编（保守解码）
-setsid <sid|init_shell> <cmd>   改当前进程 SID 后 exec（AVC 死锁时的救援通道）
-repl                            交互会话，历史持久化到 /data/local/tmp/.ktool_hist
-```
+Inside a REPL session the exploit setup is paid once and `promote` persists across commands.
 
 ---
 
-## 构建
-
-需要 ARM32 交叉工具链（`arm-none-linux-gnueabihf-`）：
+## Building
 
 ```sh
-# 工具链在 PATH 里
-./scripts/build.sh
-
-# 或者指定目录
-TOOLCHAIN=/opt/arm-gnu-toolchain/bin ./scripts/build.sh
+./scripts/build.sh                              # ktool
+TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su (static, bundled sqlite3)
 ```
 
-内核模块需要一份配置好的 GT-I9500 内核源码树：
+Kernel module:
 
 ```sh
 cd kmod
 make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 ```
 
+`KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
+
 ---
 
-## 部署
+## Porting to another device
 
-前提：设备已通过 CVE-2015-1805 拿到一次任意读写（`ktool root` 可用），
-`/system` 可通过 `pwn + flush` 后 remount。
+Only **one file** changes: `src/targets.h`. The kernel module includes the same header, so the
+two sides can never disagree about offsets.
+
+### What has to be true
+
+- ARM32 kernel, `task_struct`/`cred` layout close to 3.4.x
+- CVE-2015-1805 (or another primitive) gives you arbitrary R/W
+- Samsung `lkmauth` bootmode variable exists (the `boot` command uses it)
+
+If the target is a **close relative** — same SoC, same kernel generation (another Exynos 5410
+device, for instance) — the `[B]` offsets and the general layout usually transfer unchanged.
+`permissive_map`, `exec_br` and `perm_bit` never transfer: they depend on the exact image and on
+the policy build. Never copy a whole target entry between devices; derive the `[A]` fields again
+and keep `verified = 0` until you have run the full chain.
+
+### Step 1 — identity (matching key)
 
 ```sh
-# 1. 编译
-./scripts/build.sh
-
-# 2. 推到设备
-adb push src/ktool /data/local/tmp/ktool_new
-adb shell chmod 755 /data/local/tmp/ktool_new
-
-# 3. 提权 + permissive + remount，替换 /system/bin/ktool
-adb shell '/data/local/tmp/ktool pwn /system/bin/sh -c "
-    mount -o rw,remount /system &&
-    cp /data/local/tmp/ktool_new /system/bin/ktool &&
-    chown root:root /system/bin/ktool &&
-    chmod 700 /system/bin/ktool &&
-    chcon u:object_r:system_file:s0 /system/bin/ktool &&
-    mount -o ro,remount /system'"
-
-# 4. 收口（必须做，否则一直 permissive）
-adb shell su -c '/system/bin/ktool restore'
+adb shell getprop ro.product.device     # -> device
+adb shell cat /proc/version             # -> "3.4.5-XXXXXXX" -> kernel
 ```
 
-开机自举脚本 `scripts/init.sec.boot.v9g.sh` 挂到 `/system/etc/init.sec.boot.sh`，
-负责每次开机重新 patch、insmod、应用 avtab 规则、恢复 Enforcing。
-**注意：这个文件必须是 LF 换行。** 用 Windows 编辑器存成 CRLF 会让 mksh 报
-`syntax error: 'do' unexpected`，整脚本一条都不执行，然后连锁表现为"su 全程不可用"。
+Matching requires **both** device and kernel version to be equal. Matching on device alone is
+dangerous: same phone with a different kernel has completely different addresses, and the table
+would happily write into the wrong place. No match → every address-taking command refuses to run.
+
+### Step 2 — `[B]` offsets (config-dependent, usually reusable)
+
+```
+off_task_tasks off_task_real_cred off_task_cred off_task_comm
+off_cred_uid off_cred_caps off_cred_security
+```
+
+These follow the kernel config (`CONFIG_KEYS`, `CONFIG_SECURITY`, `CONFIG_DEBUG_*`), not the
+image build. Derive them from a `vmlinux` with debug info:
+
+```sh
+pahole -C task_struct vmlinux | grep -E "tasks|real_cred|cred|comm"
+pahole -C cred vmlinux | grep -E "uid|caps|security"
+```
+
+Sanity check on device once you have R/W: `fld <init_task> 0x1d0:p 0x2f8:p 0x304:s` should print a
+plausible self-referencing list head, a kernel pointer for cred, and the string `swapper/0`.
+
+### Step 3 — `[A]` addresses (per image, must be re-derived)
+
+| Field | How to get it |
+|---|---|
+| `init_task` | `System.map` / `kallsyms` of that exact kernel |
+| `modprobe_path` | symbol; 256 writable bytes in `.data`, borrowed as scratch for a fake ebitmap node |
+| `permissive_map` | address of `policydb.permissive_map`; locate `policydb` from the symbol table and add the struct offset for that policy version |
+| `avc_slots` | `avc_cache.slots[512]`, debug use only |
+| `exec_br` | inside `sys_execve`, the `beq` that skips Samsung's KNOX check |
+| `exec_br_orig` / `exec_br_patch` | the original branch word and the `b` that replaces it (this build: `0x0a000002` → `0xea000047`) |
+| `lkmauth_bootmode` | `.bss` variable, zeroed every boot |
+
+For `exec_br`, disassemble `sys_execve` and look for the conditional branch that jumps over the
+credential check; the branch offset in `exec_br_patch` must be computed from the actual instruction
+distance, not copied blindly.
+
+### Step 4 — `perm_bit`
+
+This is `init_shell`'s **type value**, not its SID, and it changes with every policy build:
+
+```sh
+adb pull /sepolicy
+python3 tools/sepolicy_parse.py sepolicy .
+# read the type table; the index of init_shell is perm_bit
+```
+
+`tools/sepolicy_query.py` helps cross-check individual rules and type numbers.
+
+### Step 5 — verify before trusting
+
+1. `ktool target` — addresses look sane, and the new entry has `verified = 0`
+2. `ktool backend probe` — must print `probe(init_task=...): OK`
+3. `ktool dump <init_task> 64` — should decode as a plausible `task_struct`
+4. `ktool sym init_task` — must agree with the table
+5. Only after the full chain (root → mount → module → restore → Enforcing) is confirmed on
+   hardware, flip `verified = 1` and write what you tested into `note`
+
+If any of these disagree, **do not proceed** — guessing addresses in kernel `.data` is how you
+turn a phone into a brick.
+
+### Step 6 — module-side values
+
+The module additionally needs the SELinux type numbers for the 8 avtab rules. These are runtime
+module parameters, so no recompile is required:
+
+```sh
+insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 \
+                    av_suexec_type=161 av_shell_type=1178 av_sysprop_type=342
+```
+
+The boot script passes them from `targets.h`-derived values; adjust it for your policy.
 
 ---
 
-## 已知边界
+## Known limits
 
-这些是实测撞过的，不是猜测：
-
-| 现象 | 原因 | 处置 |
+| Symptom | Cause | Handling |
 |---|---|---|
-| `kwrite` 大块写"成功"但内存没变 | iovec 越界落地不稳定 | 只信 8 字节块 + 读回比对 |
-| `setenforce 0` 后仍是 Enforcing | `CONFIG_ALWAYS_ENFORCE` | 改 `permissive_map` |
-| permissive 开了但 remount 仍被拒 | AVC 缓存粘性 | `flush`（`avc_ss_reset`） |
-| 写 `selinuxfs/load` 后进程卡 D 状态 | TIMA 内核完整性度量 | 不写 selinuxfs，只改内存 |
-| 改完 sid 读回校验失败 | 写 SID 后域已切换，原语行为变了 | `setsid` 只写不校验，用 `/proc/self/attr/current` 复核 |
-| 撤掉 exec patch 后 root 进程 exec 失败 | 特权能力丢失，不全是 EACCES | 保留 patch，或 `ktool patch` 重新打 |
+| Large `kwrite` "succeeds" but memory is unchanged | iovec OOB lands unreliably | only 8-byte chunks + read-back |
+| `setenforce 0` leaves it Enforcing | `CONFIG_ALWAYS_ENFORCE` | edit `permissive_map` |
+| Permissive is on but `remount` is denied | AVC cache stickiness | `flush` (`avc_ss_reset`) |
+| Process wedges in D state after touching `selinuxfs/load` | TIMA integrity measurement | never write selinuxfs |
+| `sid` write reports failure | after the write the domain has already changed, so read-back is unreliable | `setsid` writes once without verifying; confirm via `/proc/self/attr/current` |
+| Root process cannot `exec` after `unpatch` | privilege capability is gone, not just EACCES | keep the patch, or re-run `ktool patch` |
+| `su` stops working entirely after editing the boot script | CRLF line endings, script aborts before running anything | convert to LF, verify with `sh -n` on device |
 
-`setsid` 是最后的救援通道：当 AVC 缓存死锁、`mount` 和 `/dev/ktool` 全不可用时，
-它直接改当前进程的 `cred->security->sid` 换一个**新 SID**，让判定重新计算。
-
----
-
-## 文档
-
-`docs/` 里是完整的推导过程，包括大量**失败的尝试**（Binder UAF、GhostLock、dirtycow、
-semtimedop、ION、ashmem 等路线都被证伪并记录在案）。按阶段读：
-
-- `P1_*` — 设备摸底与可行性
-- `P2_*` — 泄漏通道与 UAF 路线评估（多数被否决）
-- `P3_*` — iovec 分配路径静态确认与越界自检
-- `P4_*` — 从任意读到 root、模块、SELinux 手术、su、开机自举的完整落地
-
-索引见 [`docs/README.md`](docs/README.md)。
+`setsid` is the last-resort path: when the AVC cache is deadlocked and both `mount` and
+`/dev/ktool` are unusable, it rewrites `cred->security->sid` to a **new** SID so the verdict is
+computed from scratch.
 
 ---
 
-## 参考
+## Credits
 
-- CVE-2015-1805：`pipe_read()` / `pipe_write()` 的 iovec 越界（iovyroot 利用思路）
-- phh's Superuser（su 协议与 APK 侧对接）
-- SELinux 内核实现：`security/selinux/ss/{avtab,policydb,services}.c`、`avc.c`
+- CVE-2015-1805 — `pipe_read()` / `pipe_write()` iovec OOB (iovyroot exploitation approach)
+- phh's Superuser — su protocol and APK side
+- SELinux in-kernel implementation: `security/selinux/ss/{avtab,policydb,services}.c`, `avc.c`
 
----
+## Disclaimer
 
-## 免责声明
-
-仅用于**自己持有设备**的安全研究与系统维护。
-对设备做任何写入前请先确认有可用的恢复手段；本项目不对任何设备损坏、数据丢失或保修失效负责。
-不同 ROM / 内核版本的地址与类型编号不同，`targets.h` 里有校验，识别不到会直接拒绝执行地址类操作。
+For security research and maintenance on **devices you own**.
+Make sure you have a working recovery path before writing anything. No warranty of any kind;
+the authors are not responsible for bricked devices, data loss, or voided warranties.
+Addresses and type values differ per ROM and kernel — `targets.h` refuses to run when the match
+fails, and that check exists for a reason.
 
 ## License
 
-除 `su/` 目录外，本项目采用 GPL-2.0（内核模块必须与内核兼容）。
-`su/` 是 phh's Superuser 的派生物，沿用其 GPL-3.0，作为独立程序分发。
+GPL-2.0 for everything except `su/`, which is a derivative of phh's Superuser and stays GPL-3.0
+(distributed as a separate program, not linked against this code).
