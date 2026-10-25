@@ -167,16 +167,12 @@ is not granted to the `shell` domain, so `capable()` fails at the SELinux layer 
 `CapEff` says. CVE-2016-3134 and CVE-2016-9793 both die there. Judging by patch state alone would
 have marked both "exploitable" and sent the next two weeks down a chain that cannot start.
 
-### Leak routes that failed
-
-Two were closed, for different reasons — the distinction matters if you plan to retry them.
-
-The systematic infoleak scan (`src/poc/leakfuzz*.c`, 254 probes across every shell-reachable
-surface) found **zero** usable stack addresses. The `WARN`-`%p` channel is different: it genuinely
-prints kernel stack addresses, and `dmesg` is readable from `shell` on this build, so the leak is
-real. But the trigger path BUGs inside a `pi_lock` critical section, killing the thread while it
-still holds a real lock; softlockup panics roughly 27 seconds later. It is not a missing leak, it
-is a self-defeating one.
+Two leak routes were also closed, and both look promising until you test them. The systematic
+infoleak scan (254 probes across every shell-reachable surface) found zero usable stack addresses.
+The `WARN`-`%p` channel does print real kernel stack addresses, and `dmesg` is readable from
+`shell` on this build — but the trigger path BUGs inside a `pi_lock` critical section, so the
+thread dies still holding a real lock and softlockup panics about 27 seconds later. Not a missing
+leak; a self-defeating one.
 
 ### GhostLock availability
 
