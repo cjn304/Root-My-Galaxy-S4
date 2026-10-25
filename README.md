@@ -20,22 +20,18 @@ check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
 ### 2. Install
 
 ```sh
-./scripts/deploy_ktool.sh
+./scripts/install.sh
 ```
 
-One shot: push, escalate, flush, remount, replace, self-test, restore. Prints `DEPLOY_OK` and the
-final SELinux state. Need a binary? See [Building](#building).
+Installs both halves: `ktool` (the exploit plus the toolbox) and `su` (what apps actually talk
+to). It builds whatever is missing — so no toolchain is needed if prebuilt binaries are already in
+`src/` — then runs the two deploy steps in order. Both are idempotent.
+
+Only need command-line root, no app prompts? `./scripts/deploy_ktool.sh` alone is enough.
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
-
-The `su` binary is built and deployed the same way:
-
-```sh
-./scripts/build_su.sh      # -> src/su_new
-./scripts/deploy_su.sh
-```
 
 > **Tiers.** `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. `adb shell su` works
 > without a prompt in tiers 2 and 3; app requests always go through the per-app allowlist and the
