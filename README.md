@@ -112,43 +112,6 @@ Insertion details that matter: `policydb + 0x74` is `te_avtab` (htable / nslot /
 
 ---
 
-## Route survey
-
-Which vulnerabilities were actually checked on this device, and what the check found.
-
-| CVE | Subsystem | Verdict | Basis |
-|---|---|---|---|
-| **CVE-2015-1805** | pipe iovec OOB | **Vulnerable — the route used here** | `pipe_iov_copy_from_user` still has the 4-argument form (the fix adds a 5th `atomic_t` argument). Arbitrary R/W confirmed on hardware. |
-| CVE-2016-5195 | dirtycow / `follow_page` | Fixed | The three-condition check is present: `FOLL_FORCE` \| `FOLL_COW` (0x4010) compared against pte dirty (0x80). A canary survived ~570k write attempts. |
-| CVE-2019-2215 | binder UAF | Fixed | `binder_free_thread` zeroes `t->from` and `t->to_thread` before releasing the thread, so the wake path is dead. |
-| CVE-2026-43499 | GhostLock, futex PI | Intact, partially demonstrated | `__list_del_entry` reaches `udf`, so the plain list path is fatal. The plist path differs: `plist_del` clears both `CONFIG_DEBUG_LIST` checks and `plist_add` then succeeds. Not carried to an end-to-end escalation. |
-| CVE-2013-6282 | ARM `get_user` / `put_user` | Fixed | Tested on device. |
-| CVE-2015-3636 | ping socket UAF | Present, not tested | `ping_rcv` / `ping_v4_unhash` exist; reference shape not analysed. |
-| CVE-2020-0009 | ashmem prot bypass | Probe only | `src/poc/ashmem_cve_2020_0009.c` exists; no recorded verdict. |
-
-Two leak routes were closed for different reasons, and the distinction matters. The systematic
-infoleak scan (`src/poc/leakfuzz*.c`) found **zero** usable stack addresses across the whole
-shell-reachable surface. The `WARN`-`%p` channel does print real stack addresses and `dmesg` is
-readable from `shell` on this build — but the trigger path BUGs inside a `pi_lock` critical
-section, killing the thread while it still holds a real lock, so softlockup panics roughly 27 s
-later. It is not a missing leak; it is a self-defeating one.
-
-### GhostLock and ION across generations
-
-The S4 row is the only one backed by device work in this repository. Everything below it is
-firmware analysis or public reporting, not a chain completed here.
-
-| Generation | GhostLock alone | ION + GhostLock | Basis |
-|---|---|---|---|
-| S4 and older (3.0 / 3.4) | plausible | plausible | On the S4 the plist path already passes both `DEBUG_LIST` checks, and `semtimedop` makes `waiter->lock` fully controllable — both blockers are gone. No end-to-end escalation was completed. |
-| S5 / S6 (3.4) | no | no | S5 firmware measured `CONFIG_DEBUG_LIST=y` with a `panic()` on corruption, so a forged node must be self-consistent, which needs a kernel read primitive first. The "ION/PVR infoleak replaces the read primitive" assumption does not hold. |
-| S7 and newer (4.4+) | plausible | not needed | Production kernels generally ship with `DEBUG_LIST` off; without the consistency check a forged node no longer has to be self-consistent, so a read primitive stops being a prerequisite. Public chains exist; none verified here. |
-
-The gap between the S4 needing a read primitive and the S7 not needing one is essentially one
-config option: whether a malformed list node turns into a panic.
-
----
-
 ## Building
 
 ```sh
@@ -164,6 +127,66 @@ make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 ```
 
 `KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
+
+---
+
+## Route survey
+
+Every CVE checked against this exact kernel (`3.4.5-6264821`). The table keeps two separate
+columns on purpose: whether the bug is still in the code, and whether a `shell`-uid process can
+actually reach it. Nineteen were checked. One is usable.
+
+| CVE | Subsystem | Vulnerability | Exploitability | Basis |
+|---|---|---|---|---|
+| **CVE-2015-1805** | pipe iovec OOB | **PRESENT** | **USED HERE** | `pipe_iov_copy_from_user` still takes 4 arguments (the fix adds a fifth `atomic_t *`). Arbitrary R/W confirmed on hardware. |
+| CVE-2026-43499 | GhostLock, futex PI | PRESENT | BLOCKED (no read primitive) | Chain stages A/B/C were demonstrated on this device, and the plist path clears both `CONFIG_DEBUG_LIST` checks. But a forged node must be self-consistent, which needs a stack address — and this build has no infoleak. Only useful on a device that lacks CVE-2015-1805. |
+| CVE-2016-3134 | netfilter, `xt_compat_match_from_user` | PRESENT | BLOCKED (CAP_NET_ADMIN) | No lower bound on `msize` before `memcpy(m->data, cm->data, msize - sizeof(*cm))`. The iptables path requires `CAP_NET_ADMIN`. |
+| CVE-2016-9793 | socket, `SO_SNDBUFFORCE` | PRESENT | BLOCKED (CAP_NET_ADMIN) | No upper bound on `sk_sndbuf`. Measured: `SO_SNDBUF` is clamped by `min_t`, while `SO_SNDBUFFORCE` returns EPERM even at uid 0 with `CapEff=ffffffff`. |
+| CVE-2016-5195 | dirtycow, `follow_page` | FIXED | — | Three-condition check present (`FOLL_FORCE` \| `FOLL_COW` against pte dirty). A canary survived ~570k write attempts. |
+| CVE-2016-0728 | keyring | FIXED | — | `key_put(keyring)` at the end of `join_session_keyring`. |
+| CVE-2016-4470 | keyring | FIXED | — | `__key_link_end` only runs when `link_ret == 0`. |
+| CVE-2016-8655 | AF_PACKET | FIXED | — | `if (unlikely(rb->pg_vec))` guard in `packet_set_ring()`. |
+| CVE-2015-3636 | ping socket UAF | FIXED | — | Tested on device. |
+| CVE-2019-2215 | binder UAF | FIXED | — | `binder_free_thread` zeroes `t->from` and `t->to_thread`. |
+| CVE-2016-5340 | ashmem | ABSENT | — | 3.4 has no `is_ashmem_file()`; `ashmem_pin_unpin` carries all four checks. |
+| CVE-2016-3951 | USB usbnet | ABSENT | — | `CONFIG_USB_USBNET` not set. |
+| CVE-2017-11176 | `mq_notify` | ABSENT | — | `CONFIG_POSIX_MQUEUE` not set. |
+| CVE-2017-6074 | DCCP | ABSENT | — | `CONFIG_IP_DCCP` not set. |
+| CVE-2019-2181 | binder | ABSENT | — | Not introduced in this tree. |
+| CVE-2020-0041 | binder | ABSENT | — | Not introduced in this tree. |
+| CVE-2020-0009 | ashmem prot | BY DESIGN | — | Intended behaviour on this kernel, not a vulnerability. |
+| CVE-2016-6728 | ION | UNKNOWN | ? | Samsung ION lives in `drivers/gpu/ion/`, not the AOSP staging path. `ION_IOC_SHARE` goes through `ion_share_dma_buf`, which does an `ion_handle_validate` rb-tree lookup. Needs a function-by-function audit of the Samsung code. |
+| CVE-2017-0564 | ION | UNKNOWN | ? | Same situation. |
+
+Two of the four reachability verdicts hit the same wall, and it is worth naming: `CAP_NET_ADMIN`
+is not granted to the `shell` domain, so `capable()` fails at the SELinux layer regardless of what
+`CapEff` says. CVE-2016-3134 and CVE-2016-9793 both die there. Judging by patch state alone would
+have marked both "exploitable" and sent the next two weeks down a chain that cannot start.
+
+### Leak routes that failed
+
+Two were closed, for different reasons — the distinction matters if you plan to retry them.
+
+The systematic infoleak scan (`src/poc/leakfuzz*.c`, 254 probes across every shell-reachable
+surface) found **zero** usable stack addresses. The `WARN`-`%p` channel is different: it genuinely
+prints kernel stack addresses, and `dmesg` is readable from `shell` on this build, so the leak is
+real. But the trigger path BUGs inside a `pi_lock` critical section, killing the thread while it
+still holds a real lock; softlockup panics roughly 27 seconds later. It is not a missing leak, it
+is a self-defeating one.
+
+### GhostLock and ION across generations
+
+Only the S4 row is backed by device work in this repository. Everything below it is firmware
+analysis or public reporting, not a chain completed here.
+
+| Generation | GhostLock alone | ION + GhostLock | Basis |
+|---|---|---|---|
+| S4 and older (3.0 / 3.4) | plausible | plausible | On the S4 the plist path already passes both `DEBUG_LIST` checks, and `semtimedop` makes `waiter->lock` fully controllable — both blockers are gone. No end-to-end escalation was completed. |
+| S5 / S6 (3.4) | no | no | S5 firmware measured `CONFIG_DEBUG_LIST=y` with a `panic()` on corruption, so a forged node must be self-consistent, which needs a kernel read primitive first. The "ION/PVR infoleak replaces the read primitive" assumption does not hold. |
+| S7 and newer (4.4+) | plausible | not needed | Production kernels generally ship with `DEBUG_LIST` off; without the consistency check a forged node no longer has to be self-consistent, so a read primitive stops being a prerequisite. Public chains exist; none verified here. |
+
+The gap between the S4 needing a read primitive and the S7 not needing one is essentially one
+config option: whether a malformed list node turns into a panic.
 
 ---
 
