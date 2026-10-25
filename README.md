@@ -30,27 +30,39 @@ Root prompts on the app side are handled by **phh's Superuser** — install it b
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
-The `su` binary is deployed the same way, after building it with `./scripts/build_su.sh`:
+The `su` binary is built and deployed the same way:
 
 ```sh
+./scripts/build_su.sh      # -> src/su_new
 ./scripts/deploy_su.sh
 ```
+
+> **Tier 3 does not mean "grant everything".** It only lets both caller types past the first gate;
+> the request then goes to the per-app allowlist and, failing that, to the phh prompt. Measured on
+> this device: under tier 3, `adb shell su -c id` raises the prompt and the APK answers `DENY`
+> (it treats uid 2000 as an ordinary app), so adb root stops working. Use tier 2 when you need
+> `adb shell` root, tier 3 when you want app prompts.
+>
+> Changing the tier: use the Superuser settings screen, or write `/data/local/tmp/su_access_mode`
+> with `access_disabled` / `apps_only` / `adb_only` / `apps_and_adb` — that file takes precedence
+> over the property. `setprop persist.sys.root_access N` from `adb shell` reports success but is
+> silently dropped; the `shell` domain has no write permission on `system_prop`.
 
 ### 3. Verify
 
 ```sh
 adb shell '/data/local/tmp/ktool_new target'    # must say "verified: yes"
 adb shell 'getenforce'                          # Enforcing
-adb shell 'su -c id'                            # uid=0, context=u:r:init_shell:s0
+adb shell 'su -c id'                            # uid=0, needs tier 2 (see the note above)
 ```
 
 The first line uses the copy left in `/data/local/tmp` on purpose: `/system/bin/ktool` is
 `0700 root:root`, and the `shell` domain cannot execute it. Once `su` is installed you can use
 `adb shell 'su -c "/system/bin/ktool target"'` instead.
 
-Boot persistence is optional: `ktool boot /system/lib/modules/ktool_mod.ko`, then install
-`scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. Keep it **LF** — CRLF makes
-mksh abort before running a single line.
+Boot persistence is optional: `/data/local/tmp/ktool_new boot /system/lib/modules/ktool_mod.ko`,
+then install `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. Keep it **LF** — CRLF
+makes mksh abort before running a single line.
 
 ---
 
@@ -62,7 +74,7 @@ mksh abort before running a single line.
 | Escalation | Overwrites uid/gid/caps in the current `cred` in place; `cred->security` is untouched, so the SID does not change |
 | SELinux end state | `Enforcing`, `permissive_map` = 0, no leftover permissive triples |
 | Policy changes | 8 allow rules inserted into the in-memory `te_avtab`; nothing written to disk |
-| Root policy | Four tiers via `persist.sys.root_access`: `0` deny all, `1` apps only, `2` ADB only, `3` everything. App prompts go through the phh protocol |
+| Root policy | `persist.sys.root_access`: `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. Tiers 1 and 3 still pass through the per-app allowlist and the prompt; tier 2 is the only one where `adb shell su` works without a prompt (see the note under How to use) |
 | `/system` writes | remount rw → modify → back to ro, cold boot verified |
 | KNOX | Warranty Bit intact, `RST_STAT` normal |
 
@@ -95,7 +107,7 @@ sepf  : SEPF_GT-I9500_5.0.1-1_0039
 
 Three details that decide whether any of this works:
 
-**`kwrite` lies about its length.** Every call returns 0 regardless of outcome. Landing rate over 5 independent tries: 8 B → 5/5, 16 B → 1/5, 32 B → 0/5, 48 B → 0/5, 72 B → 1/5. Hence fixed 8-byte chunks with read-back verification and an undo log. Slow (about 1 MB/min), but never silently half-applied.
+**`kwrite` lies about its length.** Every call returns 0 regardless of outcome. Landing rate over 5 independent tries: 8 B → 5/5, 16 B → 1/5, 32 B → 0/5, 48 B → 0/5, 72 B → 1/5. Hence fixed 8-byte chunks with read-back verification and an undo log. Measured on this device, a single 8-byte read costs 0.9 ms with 2.9 retries on average; a write costs a write plus a read-back, so moving a megabyte takes minutes, not seconds.
 
 **`setenforce 0` is dead on this kernel.** `CONFIG_ALWAYS_ENFORCE` makes `avc_denied()` return `-EACCES` without ever consulting `selinux_enforcing`. The only lever is `permissive_map`.
 
@@ -289,7 +301,14 @@ pahole -C cred vmlinux | grep -E "uid|caps|security"
 ```
 
 Sanity check on device once you have R/W: `fld <init_task> 0x1d0:p 0x2f8:p 0x304:s` should print a
-plausible self-referencing list head, a kernel pointer for `cred`, and the `comm` string of PID 0.
+pointer into the task list, `init_cred` for `real_cred` (the symbol annotation next to it is the
+good sign), and the string `swapper/0`. Measured on this device:
+
+```
++0x1d0 p  0xe68481d0
++0x2f8 p  0xc0b9f1dc  Dinit_cred+0x0
++0x304 s  "swapper/0"
+```
 
 ### Step 3 — `[A]` addresses (per image, must be re-derived)
 
