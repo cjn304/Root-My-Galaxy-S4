@@ -23,20 +23,30 @@ check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
 ./scripts/deploy_ktool.sh
 ```
 
-One shot: push, escalate, flush, remount, replace, restore. Prints `DEPLOY_OK` and the final
-SELinux state. Need a binary? See [Building](#building).
+One shot: push, escalate, flush, remount, replace, self-test, restore. Prints `DEPLOY_OK` and the
+final SELinux state. Need a binary? See [Building](#building).
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
+The `su` binary is deployed the same way, after building it with `./scripts/build_su.sh`:
+
+```sh
+./scripts/deploy_su.sh
+```
+
 ### 3. Verify
 
 ```sh
-adb shell '/system/bin/ktool target'    # must say "verified: yes"
-adb shell 'getenforce'                  # Enforcing
-adb shell 'su -c id'                    # uid=0, context=u:r:init_shell:s0
+adb shell '/data/local/tmp/ktool_new target'    # must say "verified: yes"
+adb shell 'getenforce'                          # Enforcing
+adb shell 'su -c id'                            # uid=0, context=u:r:init_shell:s0
 ```
+
+The first line uses the copy left in `/data/local/tmp` on purpose: `/system/bin/ktool` is
+`0700 root:root`, and the `shell` domain cannot execute it. Once `su` is installed you can use
+`adb shell 'su -c "/system/bin/ktool target"'` instead.
 
 Boot persistence is optional: `ktool boot /system/lib/modules/ktool_mod.ko`, then install
 `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. Keep it **LF** — CRLF makes
@@ -49,10 +59,10 @@ mksh abort before running a single line.
 | Item | Result |
 |---|---|
 | Arbitrary kernel R/W | CVE-2015-1805 (pipe iovec OOB), both directions |
-| Escalation | `prepare_kernel_cred(NULL)` + direct `task->cred` overwrite; uid/gid/caps all 0 |
+| Escalation | Overwrites uid/gid/caps in the current `cred` in place; `cred->security` is untouched, so the SID does not change |
 | SELinux end state | `Enforcing`, `permissive_map` = 0, no leftover permissive triples |
 | Policy changes | 8 allow rules inserted into the in-memory `te_avtab`; nothing written to disk |
-| Root policy | Four tiers: deny all / ADB only / apps only / everything; app prompts via phh protocol |
+| Root policy | Four tiers via `persist.sys.root_access`: `0` deny all, `1` apps only, `2` ADB only, `3` everything. App prompts go through the phh protocol |
 | `/system` writes | remount rw → modify → back to ro, cold boot verified |
 | KNOX | Warranty Bit intact, `RST_STAT` normal |
 
@@ -74,8 +84,8 @@ sepf  : SEPF_GT-I9500_5.0.1-1_0039
 1. Arbitrary read    CVE-2015-1805 pipe_read iovec OOB. 8-byte aligned, 2000 B per call.
 2. Arbitrary write   Same bug, writev direction. kwrite() ALWAYS returns 0, so every
                      write is read back and compared; only 8-byte chunks are trusted.
-3. Escalation        Walk task list -> task->real_cred/cred -> zero uid/gid, fill caps.
-                     Deliberately avoids commit_creds() so SELinux does not recompute the SID.
+3. Escalation        Walk task list -> task->real_cred/cred -> overwrite uid/gid/caps in place.
+                     cred->security is left alone, so the SELinux SID does not change.
 4. SELinux           a) set permissive_map (in-memory ebitmap, never selinuxfs)
                      b) avc_ss_reset(0) — otherwise cached denies keep winning
                      c) insert 8 allow rules into policydb->te_avtab
@@ -279,7 +289,7 @@ pahole -C cred vmlinux | grep -E "uid|caps|security"
 ```
 
 Sanity check on device once you have R/W: `fld <init_task> 0x1d0:p 0x2f8:p 0x304:s` should print a
-plausible self-referencing list head, a kernel pointer for cred, and the string `swapper/0`.
+plausible self-referencing list head, a kernel pointer for `cred`, and the `comm` string of PID 0.
 
 ### Step 3 — `[A]` addresses (per image, must be re-derived)
 
@@ -356,7 +366,7 @@ Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry tim
 | `read <addr> <len>` | Read and emit raw binary to stdout, max 16 MB |
 | `kread_file <addr> <len> <out> [-r\|--resume]` | Chunked read to file; `-r` resumes from existing file size |
 | `bench [addr] [n]` | Read throughput: ms/read and average retries |
-| `selftest <addr>` | Read the same address N times and compare for stability |
+| `selftest <addr>` | Read the same address 4 times and print the first words — shows whether reads are stable |
 
 ### Write
 
