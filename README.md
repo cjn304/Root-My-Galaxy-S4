@@ -37,11 +37,9 @@ The `su` binary is built and deployed the same way:
 ./scripts/deploy_su.sh
 ```
 
-> **Tier 3 does not mean "grant everything".** It only lets both caller types past the first gate;
-> the request then goes to the per-app allowlist and, failing that, to the phh prompt. Measured on
-> this device: under tier 3, `adb shell su -c id` raises the prompt and the APK answers `DENY`
-> (it treats uid 2000 as an ordinary app), so adb root stops working. Use tier 2 when you need
-> `adb shell` root, tier 3 when you want app prompts.
+> **Tiers.** `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. `adb shell su` works
+> without a prompt in tiers 2 and 3; app requests always go through the per-app allowlist and the
+> phh prompt. Measured on this device: `0` and `1` deny uid 2000, `2` and `3` return `uid=0`.
 >
 > Changing the tier: use the Superuser settings screen, or write `/data/local/tmp/su_access_mode`
 > with `access_disabled` / `apps_only` / `adb_only` / `apps_and_adb` — that file takes precedence
@@ -53,7 +51,7 @@ The `su` binary is built and deployed the same way:
 ```sh
 adb shell '/data/local/tmp/ktool_new target'    # must say "verified: yes"
 adb shell 'getenforce'                          # Enforcing
-adb shell 'su -c id'                            # uid=0, needs tier 2 (see the note above)
+adb shell 'su -c id'                            # uid=0 (tiers 2 and 3)
 ```
 
 The first line uses the copy left in `/data/local/tmp` on purpose: `/system/bin/ktool` is
@@ -74,7 +72,7 @@ makes mksh abort before running a single line.
 | Escalation | Overwrites uid/gid/caps in the current `cred` in place; `cred->security` is untouched, so the SID does not change |
 | SELinux end state | `Enforcing`, `permissive_map` = 0, no leftover permissive triples |
 | Policy changes | 8 allow rules inserted into the in-memory `te_avtab`; nothing written to disk |
-| Root policy | `persist.sys.root_access`: `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. Tiers 1 and 3 still pass through the per-app allowlist and the prompt; tier 2 is the only one where `adb shell su` works without a prompt (see the note under How to use) |
+| Root policy | `persist.sys.root_access`: `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. ADB is let through without a prompt in tiers 2 and 3; app requests always go through the allowlist and the phh prompt |
 | `/system` writes | remount rw → modify → back to ro, cold boot verified |
 | KNOX | Warranty Bit intact, `RST_STAT` normal |
 

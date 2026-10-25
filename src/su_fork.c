@@ -508,15 +508,23 @@ int main(int argc, char **argv)
 
 		/* 白名单 / 数据库：命中就不弹窗，通知 A 退出 */
 		/*
-		 * 「仅限于 ADB」档的语义就是"ADB 可以、应用不行"，不该再去问 APK。
-		 * 实测在该档下 APK 收到 uid=2000 的请求会秒回 DENY（它自己按 "app"
-		 * 类型处理），于是 adb root 完全不可用。这里直接放行 adb。
+		 * adb 的请求不该经过弹窗：APK 收到 uid=2000 会按普通 "app" 处理
+		 * 并秒回 DENY（实测），于是 adb root 在这些档位下完全不可用。
+		 *
+		 *   adb_only   语义就是"ADB 可以、应用不行"，直接放行。
+		 *   apps_and_adb 语义同样是"应用和 ADB 都行"，也直接放行；
+		 *               应用侧仍然走 allowlist / 弹窗（不走这个分支）。
+		 *   空值       等同 apps_and_adb（read_access_mode 的既定行为）。
+		 *
+		 * 只有 apps_only / access_disabled 会落到这里且 caller==2000，
+		 * 但那时 access_allows() 已经把它们拒掉了，走不到这一步。
 		 */
 		if (caller == AID_SHELL) {
 			char m2[64];
 
 			read_access_mode(m2, sizeof(m2));
-			if (!strcmp(m2, "adb_only")) {
+			if (!m2[0] || !strcmp(m2, "adb_only") ||
+			    !strcmp(m2, "apps_and_adb")) {
 				close(p2c[1]);
 				waitpid(pid, NULL, 0);
 				goto run;

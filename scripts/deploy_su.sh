@@ -56,7 +56,8 @@ adb shell "$KT root /system/bin/sh -c '
 	echo deployed
 '" | tail -1
 
-adb shell "$KT w32 0xc0c4d490 1" >/dev/null 2>&1 || true
+# 不收尾写 selinux_enforcing：permissive 一直是靠 permissive_map 做的，
+# 这个变量从头到尾没被改过，写它等于多一次无谓的内核写。
 adb shell "$KT enforce" >/dev/null 2>&1 || true
 
 echo "== 终态 =="
