@@ -209,7 +209,7 @@ for free while rebalancing, which is why the same bug is far easier on newer ker
 | Kernel | `waiter` is | Node validated? | External read primitive | GhostLock alone |
 |---|---|---|---|---|
 | 3.4 / 3.10 (S4, S5, S6) | `plist_node` | yes — `udf` | **required**, and must be a *stack* address | **no** |
-| 3.14+ / 5.x / 6.x (S7 and later) | `rb_node` | no | not required | plausible |
+| 3.14 and later (S7 onward, 4.4 / 4.9 / …) | `rb_node` | no | not required | plausible |
 
 S5 firmware confirms the pattern from the other side: `CONFIG_DEBUG_LIST=y` again, but with a
 `panic()` instead of `udf` — same effect, different instruction. S6 uses the same plist structure.
