@@ -364,6 +364,10 @@ computed from scratch.
 - phh's Superuser — su protocol and APK side
 - SELinux in-kernel implementation: `security/selinux/ss/{avtab,policydb,services}.c`, `avc.c`
 
+Substantial parts of the code and prose here were written with AI assistance. Every address,
+offset, permission mask and `verified` claim was checked against a real device: the experiments,
+the failure analysis and the decisions about what to keep are human work.
+
 ---
 
 ## Disclaimer
