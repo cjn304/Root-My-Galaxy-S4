@@ -139,7 +139,7 @@ actually reach it. Nineteen were checked. One is usable.
 | CVE | Subsystem | Vulnerability | Exploitability | Basis |
 |---|---|---|---|---|
 | **CVE-2015-1805** | pipe iovec OOB | **PRESENT** | **USED HERE** | `pipe_iov_copy_from_user` still takes 4 arguments (the fix adds a fifth `atomic_t *`). Arbitrary R/W confirmed on hardware. |
-| CVE-2026-43499 | GhostLock, futex PI | PRESENT | BLOCKED (no read primitive) | Chain stages A/B/C were demonstrated on this device, and the plist path clears both `CONFIG_DEBUG_LIST` checks. But a forged node must be self-consistent, which needs a stack address — and this build has no infoleak. Only useful on a device that lacks CVE-2015-1805. |
+| CVE-2026-43499 | GhostLock, futex PI | PRESENT | BLOCKED (no read primitive) | Chain stages A/B/C were demonstrated on this device, but only by using CVE-2015-1805's read primitive to build a self-consistent forged node — after which both `CONFIG_DEBUG_LIST` checks pass. Without that primitive the node cannot be made self-consistent, so the chain cannot start. And once you have the primitive, GhostLock adds nothing. |
 | CVE-2016-3134 | netfilter, `xt_compat_match_from_user` | PRESENT | BLOCKED (CAP_NET_ADMIN) | No lower bound on `msize` before `memcpy(m->data, cm->data, msize - sizeof(*cm))`. The iptables path requires `CAP_NET_ADMIN`. |
 | CVE-2016-9793 | socket, `SO_SNDBUFFORCE` | PRESENT | BLOCKED (CAP_NET_ADMIN) | No upper bound on `sk_sndbuf`. Measured: `SO_SNDBUF` is clamped by `min_t`, while `SO_SNDBUFFORCE` returns EPERM even at uid 0 with `CapEff=ffffffff`. |
 | CVE-2016-5195 | dirtycow, `follow_page` | FIXED | — | Three-condition check present (`FOLL_FORCE` \| `FOLL_COW` against pte dirty). A canary survived ~570k write attempts. |
@@ -155,8 +155,12 @@ actually reach it. Nineteen were checked. One is usable.
 | CVE-2019-2181 | binder | ABSENT | — | Not introduced in this tree. |
 | CVE-2020-0041 | binder | ABSENT | — | Not introduced in this tree. |
 | CVE-2020-0009 | ashmem prot | BY DESIGN | — | Intended behaviour on this kernel, not a vulnerability. |
-| CVE-2016-6728 | ION | UNKNOWN | ? | Samsung ION lives in `drivers/gpu/ion/`, not the AOSP staging path. `ION_IOC_SHARE` goes through `ion_share_dma_buf`, which does an `ion_handle_validate` rb-tree lookup. Needs a function-by-function audit of the Samsung code. |
-| CVE-2017-0564 | ION | UNKNOWN | ? | Same situation. |
+| CVE-2016-6728 | ION, msm custom ioctl | ABSENT | — | Targets the Qualcomm msm ION custom/secure paths. The S4 ships Samsung's own `drivers/gpu/ion/ion.c`, where `ION_IOC_CUSTOM` is NULL — measured: commands 0..8 all return ENOTTY. |
+| CVE-2017-0564 | ION, msm | ABSENT | — | Same reason: the vulnerable entry points do not exist on this implementation. |
+
+A caveat on the last two: ABSENT is a verdict for *this* device only. The S5 firmware carries the
+Qualcomm msm ION (`msm_ion_custom_ioctl`, `ion_cp_change_mem_v2`, `ion_secure_*`), so both CVEs
+have to be re-audited against msm code rather than inherited from the S4 result.
 
 Two of the four reachability verdicts hit the same wall, and it is worth naming: `CAP_NET_ADMIN`
 is not granted to the `shell` domain, so `capable()` fails at the SELinux layer regardless of what
@@ -174,19 +178,48 @@ real. But the trigger path BUGs inside a `pi_lock` critical section, killing the
 still holds a real lock; softlockup panics roughly 27 seconds later. It is not a missing leak, it
 is a self-defeating one.
 
+### plist vs rbtree: the actual gate
+
+The dependency does not come from how many nodes a rebalance touches. It comes from whether the
+kernel **validates** the node before dereferencing it.
+
+On 3.4, `CONFIG_DEBUG_LIST=y` together with `CONFIG_SEC_DEBUG_LIST_PANIC` makes `list_debug` a
+non-zero global, so `if (list_debug) BUG_ON(...)` always takes the BUG path. In the shipped binary
+the four consistency checks in `__list_del_entry` (`0xc025cd68`) are compiled down to an
+**unconditional** `udf #0x12`. There is nothing to negotiate: a forged node either satisfies every
+check or panics.
+
+`lib/rbtree.c` (401 lines in this tree) has **no runtime validation at all** — no `DEBUG_RBTREE`,
+no `__rb_erase_valid`, nothing in `rb_insert_color`. It dereferences and moves on, so a forged
+`rb_node` does not have to be self-consistent.
+
+That one difference decides the whole route:
+
+| Kernel | `waiter` is | Node validated? | External read primitive needed? |
+|---|---|---|---|
+| 3.4 / 3.10 (S4, S5, S6) | `plist_node` | yes — `udf` | **yes**, and specifically a *stack* address |
+| 3.14+ / 5.x / 6.x (S7 and later) | `rb_node` | no | **no** |
+
+On top of that, `rb_insert_color` gives the stack address away for free while rebalancing. That is
+why the same bug is far easier on newer kernels: no `DEBUG_LIST`, and no external leak required.
+
 ### GhostLock and ION across generations
 
-Only the S4 row is backed by device work in this repository. Everything below it is firmware
-analysis or public reporting, not a chain completed here.
+Only the S4 row is backed by device work in this repository.
 
-| Generation | GhostLock alone | ION + GhostLock | Basis |
-|---|---|---|---|
-| S4 and older (3.0 / 3.4) | plausible | plausible | On the S4 the plist path already passes both `DEBUG_LIST` checks, and `semtimedop` makes `waiter->lock` fully controllable — both blockers are gone. No end-to-end escalation was completed. |
-| S5 / S6 (3.4) | no | no | S5 firmware measured `CONFIG_DEBUG_LIST=y` with a `panic()` on corruption, so a forged node must be self-consistent, which needs a kernel read primitive first. The "ION/PVR infoleak replaces the read primitive" assumption does not hold. |
-| S7 and newer (4.4+) | plausible | not needed | Production kernels generally ship with `DEBUG_LIST` off; without the consistency check a forged node no longer has to be self-consistent, so a read primitive stops being a prerequisite. Public chains exist; none verified here. |
+| Generation | `waiter` | GhostLock alone | GhostLock + ION | Basis |
+|---|---|---|---|---|
+| S4 and older (3.0 – 3.4) | plist | **no** | **no** | The plist path requires a self-consistent node, which requires the target thread's **stack** address. ION's infoleak returns a **kernel heap** address (measured on the S4: `handle = 0xd8aed780`), while the forged `node_list` has to point at `waiter + 0x0C` on the stack. Heap is not stack, so the leak does not close the gap. ION's SHARE/FREE race only ever won a refcount — a leak, not memory corruption. |
+| S5 / S6 (3.4 / 3.10) | plist | **no** | **no** | Same structure. S5 firmware additionally measured `CONFIG_DEBUG_LIST=y` with a `panic()` instead of `udf` — same effect, different instruction. Note S5's ION is the Qualcomm msm implementation, so its attack surface is *larger* than the S4's, but it still only matters if it yields real read/write. |
+| S7 and newer (4.4+) | rb_node | plausible | not needed | No node validation, and rebalancing leaks the stack address by itself. Public chains exist; none verified here. |
 
-The gap between the S4 needing a read primitive and the S7 not needing one is essentially one
-config option: whether a malformed list node turns into a panic.
+This leaves the S4 in an awkward position: the only thing that can hand over a stack address is
+CVE-2015-1805 itself — and once you have arbitrary read/write, GhostLock adds nothing. That is why
+this project does not use the chain at all, and why "GhostLock alone" is not a route on **any**
+plist kernel, not just this one.
+
+If an ION bug existed that gave a genuine read/write primitive rather than an infoleak, the S4
+column would change. The audit did not find one; the TOCTOU race only leaked a reference.
 
 ---
 
