@@ -485,15 +485,12 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 
 两部分：
 
-- **`src/`、`scripts/`、`tools/` 是 GPL-3.0-or-later。** 它们是普通用户态程序，通过系统调用与内核
-  交互；没有任何东西把它们链接进内核代码，所以这里的许可是一种选择，而不是约束。
-- **`kmod/` 必须是 GPL-2.0。** 它是 Linux 内核模块：调用内核内部函数、遍历内核私有结构
-  （`policydb`、`task_struct`），并被加载进一个 GPL-2.0-only 的内核。它还声明了
+- **`src/`、`scripts/`、`tools/` 是 GPL-3.0-or-later** —— 根目录的 `LICENSE`。它们是普通用户态
+  程序，通过系统调用与内核交互；没有任何东西把它们链接进内核代码，所以这里的许可是一种选择，
+  而不是约束。
+- **`kmod/` 必须是 GPL-2.0** —— `kmod/LICENSE`。它是 Linux 内核模块：调用内核内部函数、遍历内核
+  私有结构（`policydb`、`task_struct`），并被加载进一个 GPL-2.0-only 的内核。它还声明了
   `MODULE_LICENSE("GPL")`，这是它能解析 `EXPORT_SYMBOL_GPL` 符号的前提。这里不能用 GPL-3.0 ——
-  它与内核的许可不兼容。`kmod/LICENSE` 放的是 GPL-2.0 全文，文件头写的是
-  `SPDX-License-Identifier: GPL-2.0`。
+  它与内核的许可不兼容。文件头写的是 `SPDX-License-Identifier: GPL-2.0`。
 
 这里每个源文件都以一行 `SPDX-License-Identifier` 开头，所以每个文件的条款都是明确的。
-
-APK 侧的代码是刻意没有收录的。`su` 与 phh's Superuser 使用同一套 socket 协议，后者是 GPL-3.0，
-地址是 https://github.com/phhusson/Superuser。

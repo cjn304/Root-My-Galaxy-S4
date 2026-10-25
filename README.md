@@ -498,18 +498,14 @@ fails, and that check exists for a reason.
 
 Two parts:
 
-- **`src/`, `scripts/`, `tools/` are GPL-3.0-or-later.** They are ordinary userland programs
-  talking to the kernel through syscalls; nothing links them against kernel code, so the licence
-  here is a choice rather than a constraint.
-- **`kmod/` must be GPL-2.0.** It is a Linux kernel module: it calls kernel-internal functions,
-  walks kernel-private structures (`policydb`, `task_struct`) and is loaded into a GPL-2.0-only
-  kernel. It also declares `MODULE_LICENSE("GPL")`, which is what lets it resolve
-  `EXPORT_SYMBOL_GPL` symbols at all. GPL-3.0 cannot be used here — it is incompatible with the
-  kernel's licence. `kmod/LICENSE` carries the GPL-2.0 text, and the file header says
-  `SPDX-License-Identifier: GPL-2.0`.
+- **`src/`, `scripts/`, `tools/` are GPL-3.0-or-later** — the root `LICENSE`. They are ordinary
+  userland programs talking to the kernel through syscalls; nothing links them against kernel
+  code, so the licence here is a choice rather than a constraint.
+- **`kmod/` must be GPL-2.0** — `kmod/LICENSE`. It is a Linux kernel module: it calls
+  kernel-internal functions, walks kernel-private structures (`policydb`, `task_struct`) and is
+  loaded into a GPL-2.0-only kernel. It also declares `MODULE_LICENSE("GPL")`, which is what lets
+  it resolve `EXPORT_SYMBOL_GPL` symbols at all. GPL-3.0 cannot be used here — it is incompatible
+  with the kernel's licence. The file header says `SPDX-License-Identifier: GPL-2.0`.
 
 Every source file here starts with an `SPDX-License-Identifier` line, so the terms are unambiguous
 per file.
-
-The APK-side code is deliberately not vendored. `su` speaks the same socket protocol as phh's
-Superuser, which is GPL-3.0 and lives at https://github.com/phhusson/Superuser.
