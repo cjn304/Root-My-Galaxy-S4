@@ -108,6 +108,149 @@ Insertion details that matter: `policydb + 0x74` is `te_avtab` (htable / nslot /
 
 ---
 
+## Building
+
+```sh
+./scripts/build.sh                              # ktool
+TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su (static, bundled sqlite3)
+```
+
+Kernel module:
+
+```sh
+cd kmod
+make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
+```
+
+`KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
+
+---
+
+## Porting to another device
+
+Only **one file** changes: `src/targets.h`. The kernel module includes the same header, so the
+two sides can never disagree about offsets.
+
+### Likely candidates
+
+The rows below are **untested hypotheses, not verified targets** — nobody has run the chain on
+them. The reasoning is structural: same KNOX generation, same `lkmauth` mechanism, same SELinux
+`policydb` layout. That makes the *method* transfer; it does not make a single address reusable.
+
+| Device | SoC | Kernel line | Assessment |
+|---|---|---|---|
+| SM-N900 (Note 3) | Exynos 5420 | 3.4.x | Closest match: same branch and same KNOX generation as the S4 |
+| GT-I9505 (S4 LTE) | Snapdragon 600 | 3.4.x | Same branch, different SoC — the entire kernel side is a fresh port |
+| GT-I9300 (S3) | Exynos 4412 | 3.0.x | Older branch: `task_struct` layout differs, `[B]` cannot be copied |
+| GT-N7100 (Note II) | Exynos 4412 | 3.0.x | Same situation as the S3 |
+
+Kernel lines are from the stock releases (5.0.1 / 4.3 / 4.4.2) — always confirm with
+`cat /proc/version` before trusting the row.
+
+How to read it:
+
+- **Note 3** is the one worth trying first. Same kernel generation, so the `[B]` offsets have a
+  real chance of transferring, and `lkmauth_bootmode` exists under the same name.
+- **I9505** keeps the whole userland side unchanged, but the kernel is a different tree (msm).
+  Expect every `[A]` address to move; verify the exec-patch site independently rather than
+  assuming the branch distance is similar.
+- **S3 / Note II** run 3.0.x. `task_struct` and `cred` are laid out differently, so `[B]` has to
+  be re-derived instead of copied. `lkmauth` exists from 4.3 onward, but the policy build is older
+  and `perm_bit` will not match.
+
+What never transfers, on any of them: `init_task`, `permissive_map`, `avc_slots`, `exec_br`,
+`lkmauth_bootmode`, `perm_bit`. What usually does, between kernels of the same branch: the `[B]`
+offsets.
+
+### What has to be true
+
+- ARM32 kernel, `task_struct`/`cred` layout close to 3.4.x
+- CVE-2015-1805 (or another primitive) gives you arbitrary R/W
+- Samsung `lkmauth` bootmode variable exists (the `boot` command uses it)
+
+### Step 1 — identity (matching key)
+
+```sh
+adb shell getprop ro.product.device     # -> device
+adb shell cat /proc/version             # -> "3.4.5-XXXXXXX" -> kernel
+```
+
+Matching requires **both** device and kernel version to be equal. Matching on device alone is
+dangerous: same phone with a different kernel has completely different addresses, and the table
+would happily write into the wrong place. No match → every address-taking command refuses to run.
+
+### Step 2 — `[B]` offsets (config-dependent, usually reusable)
+
+```
+off_task_tasks off_task_real_cred off_task_cred off_task_comm
+off_cred_uid off_cred_caps off_cred_security
+```
+
+These follow the kernel config (`CONFIG_KEYS`, `CONFIG_SECURITY`, `CONFIG_DEBUG_*`), not the
+image build. Derive them from a `vmlinux` with debug info:
+
+```sh
+pahole -C task_struct vmlinux | grep -E "tasks|real_cred|cred|comm"
+pahole -C cred vmlinux | grep -E "uid|caps|security"
+```
+
+Sanity check on device once you have R/W: `fld <init_task> 0x1d0:p 0x2f8:p 0x304:s` should print a
+plausible self-referencing list head, a kernel pointer for cred, and the string `swapper/0`.
+
+### Step 3 — `[A]` addresses (per image, must be re-derived)
+
+| Field | How to get it |
+|---|---|
+| `init_task` | `System.map` / `kallsyms` of that exact kernel |
+| `modprobe_path` | symbol; 256 writable bytes in `.data`, borrowed as scratch for a fake ebitmap node |
+| `permissive_map` | address of `policydb.permissive_map`; locate `policydb` from the symbol table and add the struct offset for that policy version |
+| `avc_slots` | `avc_cache.slots[512]`, debug use only |
+| `exec_br` | inside `sys_execve`, the `beq` that skips Samsung's KNOX check |
+| `exec_br_orig` / `exec_br_patch` | the original branch word and the `b` that replaces it (this build: `0x0a000002` → `0xea000047`) |
+| `lkmauth_bootmode` | `.bss` variable, zeroed every boot |
+
+For `exec_br`, disassemble `sys_execve` and look for the conditional branch that jumps over the
+credential check; the branch offset in `exec_br_patch` must be computed from the actual instruction
+distance, not copied blindly.
+
+### Step 4 — `perm_bit`
+
+This is `init_shell`'s **type value**, not its SID, and it changes with every policy build:
+
+```sh
+adb pull /sepolicy
+python3 tools/sepolicy_parse.py sepolicy .
+# read the type table; the index of init_shell is perm_bit
+```
+
+`tools/sepolicy_query.py` helps cross-check individual rules and type numbers.
+
+### Step 5 — verify before trusting
+
+1. `ktool target` — addresses look sane, and the new entry has `verified = 0`
+2. `ktool backend probe` — must print `probe(init_task=...): OK`
+3. `ktool dump <init_task> 64` — should decode as a plausible `task_struct`
+4. `ktool sym init_task` — must agree with the table
+5. Only after the full chain (root → mount → module → restore → Enforcing) is confirmed on
+   hardware, flip `verified = 1` and write what you tested into `note`
+
+If any of these disagree, **do not proceed** — guessing addresses in kernel `.data` is how you
+turn a phone into a brick.
+
+### Step 6 — module-side values
+
+The module additionally needs the SELinux type numbers for the 8 avtab rules. These are runtime
+module parameters, so no recompile is required:
+
+```sh
+insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 \
+                    av_suexec_type=161 av_shell_type=1178 av_sysprop_type=342
+```
+
+The boot script passes them from `targets.h`-derived values; adjust it for your policy.
+
+---
+
 ## ktool command reference
 
 Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry time for read/write.
@@ -197,124 +340,6 @@ Inside a REPL session the exploit setup is paid once and `promote` persists acro
 
 ---
 
-## Building
-
-```sh
-./scripts/build.sh                              # ktool
-TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su (static, bundled sqlite3)
-```
-
-Kernel module:
-
-```sh
-cd kmod
-make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
-```
-
-`KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
-
----
-
-## Porting to another device
-
-Only **one file** changes: `src/targets.h`. The kernel module includes the same header, so the
-two sides can never disagree about offsets.
-
-### What has to be true
-
-- ARM32 kernel, `task_struct`/`cred` layout close to 3.4.x
-- CVE-2015-1805 (or another primitive) gives you arbitrary R/W
-- Samsung `lkmauth` bootmode variable exists (the `boot` command uses it)
-
-If the target is a **close relative** — same SoC, same kernel generation (another Exynos 5410
-device, for instance) — the `[B]` offsets and the general layout usually transfer unchanged.
-`permissive_map`, `exec_br` and `perm_bit` never transfer: they depend on the exact image and on
-the policy build. Never copy a whole target entry between devices; derive the `[A]` fields again
-and keep `verified = 0` until you have run the full chain.
-
-### Step 1 — identity (matching key)
-
-```sh
-adb shell getprop ro.product.device     # -> device
-adb shell cat /proc/version             # -> "3.4.5-XXXXXXX" -> kernel
-```
-
-Matching requires **both** device and kernel version to be equal. Matching on device alone is
-dangerous: same phone with a different kernel has completely different addresses, and the table
-would happily write into the wrong place. No match → every address-taking command refuses to run.
-
-### Step 2 — `[B]` offsets (config-dependent, usually reusable)
-
-```
-off_task_tasks off_task_real_cred off_task_cred off_task_comm
-off_cred_uid off_cred_caps off_cred_security
-```
-
-These follow the kernel config (`CONFIG_KEYS`, `CONFIG_SECURITY`, `CONFIG_DEBUG_*`), not the
-image build. Derive them from a `vmlinux` with debug info:
-
-```sh
-pahole -C task_struct vmlinux | grep -E "tasks|real_cred|cred|comm"
-pahole -C cred vmlinux | grep -E "uid|caps|security"
-```
-
-Sanity check on device once you have R/W: `fld <init_task> 0x1d0:p 0x2f8:p 0x304:s` should print a
-plausible self-referencing list head, a kernel pointer for cred, and the string `swapper/0`.
-
-### Step 3 — `[A]` addresses (per image, must be re-derived)
-
-| Field | How to get it |
-|---|---|
-| `init_task` | `System.map` / `kallsyms` of that exact kernel |
-| `modprobe_path` | symbol; 256 writable bytes in `.data`, borrowed as scratch for a fake ebitmap node |
-| `permissive_map` | address of `policydb.permissive_map`; locate `policydb` from the symbol table and add the struct offset for that policy version |
-| `avc_slots` | `avc_cache.slots[512]`, debug use only |
-| `exec_br` | inside `sys_execve`, the `beq` that skips Samsung's KNOX check |
-| `exec_br_orig` / `exec_br_patch` | the original branch word and the `b` that replaces it (this build: `0x0a000002` → `0xea000047`) |
-| `lkmauth_bootmode` | `.bss` variable, zeroed every boot |
-
-For `exec_br`, disassemble `sys_execve` and look for the conditional branch that jumps over the
-credential check; the branch offset in `exec_br_patch` must be computed from the actual instruction
-distance, not copied blindly.
-
-### Step 4 — `perm_bit`
-
-This is `init_shell`'s **type value**, not its SID, and it changes with every policy build:
-
-```sh
-adb pull /sepolicy
-python3 tools/sepolicy_parse.py sepolicy .
-# read the type table; the index of init_shell is perm_bit
-```
-
-`tools/sepolicy_query.py` helps cross-check individual rules and type numbers.
-
-### Step 5 — verify before trusting
-
-1. `ktool target` — addresses look sane, and the new entry has `verified = 0`
-2. `ktool backend probe` — must print `probe(init_task=...): OK`
-3. `ktool dump <init_task> 64` — should decode as a plausible `task_struct`
-4. `ktool sym init_task` — must agree with the table
-5. Only after the full chain (root → mount → module → restore → Enforcing) is confirmed on
-   hardware, flip `verified = 1` and write what you tested into `note`
-
-If any of these disagree, **do not proceed** — guessing addresses in kernel `.data` is how you
-turn a phone into a brick.
-
-### Step 6 — module-side values
-
-The module additionally needs the SELinux type numbers for the 8 avtab rules. These are runtime
-module parameters, so no recompile is required:
-
-```sh
-insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 \
-                    av_suexec_type=161 av_shell_type=1178 av_sysprop_type=342
-```
-
-The boot script passes them from `targets.h`-derived values; adjust it for your policy.
-
----
-
 ## Known limits
 
 | Symptom | Cause | Handling |
@@ -339,6 +364,8 @@ computed from scratch.
 - phh's Superuser — su protocol and APK side
 - SELinux in-kernel implementation: `security/selinux/ss/{avtab,policydb,services}.c`, `avc.c`
 
+---
+
 ## Disclaimer
 
 For security research and maintenance on **devices you own**.
@@ -347,7 +374,20 @@ the authors are not responsible for bricked devices, data loss, or voided warran
 Addresses and type values differ per ROM and kernel — `targets.h` refuses to run when the match
 fails, and that check exists for a reason.
 
+---
+
 ## License
 
-GPL-2.0 for everything except `su/`, which is a derivative of phh's Superuser and stays GPL-3.0
-(distributed as a separate program, not linked against this code).
+Three parts, three different reasons:
+
+- **`kmod/` must be GPL-2.0.** It is a Linux kernel module: it calls kernel-internal functions,
+  walks kernel-private structures (`policydb`, `task_struct`) and is loaded into a GPL-2.0-only
+  kernel. It also declares `MODULE_LICENSE("GPL")`, which is what allows it to resolve
+  `EXPORT_SYMBOL_GPL` symbols at all.
+- **`src/`, `scripts/`, `tools/` are GPL-2.0 here, but do not have to be.** They are ordinary
+  userland programs talking to the kernel through syscalls; nothing links them against kernel
+  code, so they could be MIT or Apache-2.0. They carry GPL-2.0 because that is how this repository
+  is distributed, not because of a technical constraint.
+- **`su/` is GPL-3.0.** It is a derivative of phh's Superuser. GPL-3.0 is incompatible with
+  GPL-2.0-only, so the two are kept as separate programs communicating over a socket — which is
+  why this directory has its own license notice instead of sharing the root one.

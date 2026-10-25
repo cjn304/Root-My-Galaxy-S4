@@ -10,8 +10,9 @@ Original copyright headers are kept in each file.
 
 phh's Superuser is **GPL-3.0**. This directory is a derivative and stays GPL-3.0.
 
-The GPL-2.0 at the repository root covers `src/`, `kmod/`, `scripts/` and `tools/` only.
-The two are separate programs — they communicate over a socket protocol rather than by
+The GPL-2.0 at the repository root covers `src/`, `kmod/`, `scripts/` and `tools/`. Only
+`kmod/` is *forced* to be GPL-2.0 (it is a kernel module); the userland parts could be relicensed.
+The two sides are separate programs — they communicate over a socket protocol rather than by
 linking — so both licenses can coexist in one repository.
 
 ## Notes
