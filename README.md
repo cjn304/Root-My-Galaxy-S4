@@ -23,29 +23,46 @@ TOOLCHAIN=/opt/arm/bin ./scripts/build.sh   # or point at it
 
 Produces `src/ktool`, a static ARM32 ELF (~423 KB).
 
-### 3. Install
+### 3. Install — one command
+
+```sh
+./scripts/deploy_ktool.sh
+```
+
+That is the whole install. It does push → escalate → flush → remount rw → replace →
+chown/chmod/chcon → remount ro → self test → restore, in one adb round trip, and prints
+`DEPLOY_OK` plus the final `Enforcing` state. There is no separate "now close permissive" step:
+`restore` is the last thing it runs, on every path including failures.
+
+Two things it handles that are easy to get wrong by hand:
+
+- **`flush` before `remount`.** `pwn` only makes *new* verdicts permissive; a cached
+  `shell -> filesystem { remount }` deny keeps winning. Skip it and you get
+  `mount: Permission denied` while permissive is demonstrably on.
+- **It escalates with the new binary itself.** The script lives in `/data/local/tmp`
+  (`shell_data_file`), which `shell` can execute and `init_shell` cannot — so `su -c sh ...`
+  would fail. It runs through `ktool pwn` instead.
+
+`./scripts/deploy_su.sh` is the same pattern for the `su` binary.
+
+<details>
+<summary>Manual install, if you want to see every step</summary>
 
 ```sh
 adb push src/ktool /data/local/tmp/ktool_new
 adb shell chmod 755 /data/local/tmp/ktool_new
-
-# Escalate + permissive, drop stale AVC verdicts, remount /system, swap the binary
-adb shell '/data/local/tmp/ktool pwn /system/bin/sh -c "
-    /system/bin/ktool flush -y 2>/dev/null;
+adb shell '/data/local/tmp/ktool_new pwn /system/bin/sh -c "
+    /data/local/tmp/ktool_new flush -y 2>/dev/null;
     mount -o rw,remount /system &&
     cp /data/local/tmp/ktool_new /system/bin/ktool &&
     chown root:root /system/bin/ktool &&
     chmod 700 /system/bin/ktool &&
     chcon u:object_r:system_file:s0 /system/bin/ktool &&
     mount -o ro,remount /system"'
-
-# Close the permissive window — do not skip this
 adb shell su -c '/system/bin/ktool restore'
 ```
 
-The `flush` is not optional in practice: `pwn` only makes *new* verdicts permissive, and
-`shell -> filesystem { remount }` is almost certainly already cached as a deny from earlier
-experiments. Without it you get `mount: Permission denied` while permissive is demonstrably on.
+</details>
 
 ### 4. Verify
 
@@ -56,9 +73,12 @@ adb shell 'getenforce'                        # Enforcing
 adb shell 'su -c id'                          # uid=0, context=u:r:init_shell:s0
 ```
 
-### 5. Boot persistence (optional)
+### 5. Kernel module and boot persistence
 
-Install `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. It re-patches,
+If the module is not installed yet, `ktool boot /system/lib/modules/ktool_mod.ko` does the three
+steps in one shot: `lkmauth_bootmode=2`, full permissive, then `insmod`.
+
+Then install `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. It re-patches,
 `insmod`s the module, applies the avtab rules and restores Enforcing on every boot.
 
 > This file **must be LF**. Saved as CRLF, mksh aborts with `syntax error: 'do' unexpected`

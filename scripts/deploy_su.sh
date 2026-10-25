@@ -11,15 +11,26 @@
 #   → mount rw → cp + chown/chmod/chcon → mount ro
 #   → 还原全局 enforcing → enforce
 #
-# 用法：./deploy_su.sh [su 二进制路径]   默认 ./su_new
+# 用法：./deploy_su.sh [su 二进制路径]   默认 <repo>/src/su_new
 set -e
 export MSYS_NO_PATHCONV=1
-BIN="${1:-./su_new}"
-KT="/data/local/tmp/ktool"
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+BIN="${1:-$HERE/../src/su_new}"
 DST="/system/xbin/su"
 
+# ktool must be reachable from the `shell` domain, i.e. under /data/local/tmp.
+# /system/bin/ktool is 0700 root:root and cannot be executed there.
+# deploy_ktool.sh leaves ktool_new behind, so prefer that.
+KT="/data/local/tmp/ktool_new"
+adb shell "[ -x $KT ]" 2>/dev/null || KT="/data/local/tmp/ktool"
+adb shell "[ -x $KT ]" 2>/dev/null || { echo "设备上找不到 $KT（先跑 ./deploy_ktool.sh）"; exit 1; }
+
 [ -f "$BIN" ] || { echo "找不到 $BIN（先跑 ./build_su.sh）"; exit 1; }
-echo "== 部署 $BIN ($(stat -c %s "$BIN") B) =="
+if command -v cygpath >/dev/null 2>&1; then
+	BIN="$(cygpath -w "$BIN")"
+fi
+echo "== 部署 $BIN ($(stat -c %s "$BIN") B)，用 $KT 提权 =="
 
 adb push "$BIN" /data/local/tmp/su_new >/dev/null
 adb shell "chmod 755 /data/local/tmp/su_new"
