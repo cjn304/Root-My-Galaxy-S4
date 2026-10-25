@@ -1,6 +1,6 @@
 # Root My Galaxy S4
 
-[English](README.md) | **简体中文**
+[English](README.md) | **中文**
 
 在三星 Galaxy S4（GT-I9500 / Exynos 5410）上做纯运行时的 root，并对 SELinux 策略做定点手术。
 不刷 boot.img、不进 recovery、不写 `selinuxfs` —— 所以 **KNOX Warranty Bit 不会被翻转**。

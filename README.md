@@ -1,6 +1,6 @@
 # Root My Galaxy S4
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [中文](README.zh-CN.md)
 
 Runtime root + surgical SELinux policy patching on the Samsung Galaxy S4 (GT-I9500 / Exynos 5410).
 No boot image flashing, no recovery, no writes to `selinuxfs` — so the **KNOX Warranty Bit is never tripped**.

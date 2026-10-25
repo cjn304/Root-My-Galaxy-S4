@@ -1,6 +1,6 @@
 # APK-side sources
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [中文](README.zh-CN.md)
 
 A partial snapshot of **phh's Superuser**, kept for reference: the prompt activities, the settings
 screen, and the socket authorization protocol that the `su` binary speaks.
@@ -12,7 +12,8 @@ screen, and the socket authorization protocol that the `su` binary speaks.
 fit together, not to be run.
 
 The `su` binary this project ships is `../src/su_fork.c`: an independent implementation of the same
-protocol, built with `../scripts/build_su.sh` and deployed by `../scripts/deploy_su.sh`.
+protocol, built from that file plus `../src/sqlite3.c`. **Nothing in this directory is needed to
+build or run it.** This snapshot exists only to document the protocol and the APK-side changes.
 
 ## License
 
@@ -52,10 +53,8 @@ here is linked against `kmod/` or `src/`.
 | `SuCheckerReceiver.java` | Root status check |
 | `lsu_Shell.java` | `libsuperuser` shell wrapper |
 | `phh_su.c` | Main `su` implementation (Apache-2.0) |
-| `su.c` | Byte-identical copy of `phh_su.c`, kept because `Android.mk` names it |
 | `phh_su.h`, `su.h`, `utils.h` | Shared headers |
 | `activity.c`, `daemon.c`, `db.c` | Upstream activity / daemon / database layer |
 | `hacks.c` | Platform shims |
-| `koush/su.c`, `koush/su.h` | Koush's original implementation |
-| `koush/daemon.c`, `koush/db.c` | Empty placeholders in this snapshot |
-| `Android.mk` | Upstream build file, incomplete here (see above) |
+| `koush/su.c`, `koush/su.h` | Koush's original implementation, for comparison |
+| `Android.mk` | Upstream build file, incomplete here. It names `su/su.c`, which is `phh_su.c` under a different filename — the duplicate was dropped from this snapshot. |
