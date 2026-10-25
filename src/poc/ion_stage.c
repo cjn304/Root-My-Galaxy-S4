@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * ion_stage.c —— ION handle 布局分阶段取证（零风险：只 alloc / free，不碰竞态）
  *

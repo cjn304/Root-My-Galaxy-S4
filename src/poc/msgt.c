@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* msgctl 栈拷贝隔离实验
  * 关键纪律：msgctl 之后**不发任何 syscall**（printf 放在前面并 flush），
  * 否则 pause/print 的新帧会把 msgctl 的栈帧覆盖掉，实验就看不到东西了。

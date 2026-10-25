@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* semtimedop 阻塞态测量：entry0 阻塞，entry1 放唯一标记，其余填充
  * 标记 u32 = 0xBEEFDEAD（sem_num=0xDEAD, sem_op=0xBEEF）→ 命中点 - 6 = 数组基址
  */

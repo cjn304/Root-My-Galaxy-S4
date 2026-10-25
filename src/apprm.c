@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * apprm — 用「目标 app 的 fsuid + untrusted_app 域」删除文件/目录（P4.28）
  *

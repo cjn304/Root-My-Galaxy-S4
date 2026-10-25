@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* diag_mem.c — 验证 MADV_DONTNEED / mprotect(PROT_READ) 在本机的真实行为 */
 #define _GNU_SOURCE
 #include <errno.h>

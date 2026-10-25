@@ -2,14 +2,18 @@
 
 **English** | [中文](README.zh-CN.md)
 
-A partial snapshot of **phh's Superuser**, kept for reference: the prompt activities, the settings
+A copy of the `su` sources and APK-side code from **phh's Superuser**, kept for reference: the prompt activities, the settings
 screen, and the socket authorization protocol that the `su` binary speaks.
 
 ## This directory does not build
 
-`Android.mk` is the upstream build file, and it references sources that are not in this snapshot —
-`utils.c`, `pts.c`, `binds.c`, `sqlite3/`, `jni/`, `packageName`. It is here to show how the pieces
-fit together, not to be run.
+`Android.mk` is the upstream build file. All of `jni/su/` is present here — `activity.c`,
+`daemon.c`, `db.c`, `hacks.c`, `utils.c`, `pts.c`, `binds.c` and their headers — so the `su`
+sources themselves are complete.
+
+What is still missing for an actual `ndk-build` is the third-party payload: `jni/libselinux`,
+`jni/libsepol` and `jni/sqlite3`, roughly 12 MB. They are not vendored. Clone the upstream repo if
+you genuinely want to build the original `su`; this project does not.
 
 The `su` binary this project ships is `../src/su_fork.c`: an independent implementation of the same
 protocol, built from that file plus `../src/sqlite3.c`. **Nothing in this directory is needed to
@@ -17,21 +21,22 @@ build or run it.** This snapshot exists only to document the protocol and the AP
 
 ## License
 
-**Apache-2.0.** Every file that carries a header says so:
+**GPL-3.0**, matching the `LICENSE` file in this directory (copied from upstream).
+
+Most `.c` files still carry Apache-2.0 headers, dated from before the project relicensed:
 
 - `activity.c`, `daemon.c` — Copyright 2010 Adam Shanks, 2008 Zinx Verituse
 - `db.c` — Copyright 2013 Koushik Dutta
 - `phh_su.c`, `phh_su.h`, `su.h`, `utils.h`, `koush/su.c`, `koush/su.h` — Copyright 2015
   Pierre-Hugues Husson, plus the above
-- `MultitaskSuRequestActivity.java`, `RequestActivity.java` — same upstream tree
+- `binds.c`, `pts.c`, `utils.c` — same upstream tree, same headers
 
-A few files carry no header in this snapshot (`Settings.java`, `SuHelper.java`,
-`SuCheckerReceiver.java`, `lsu_Shell.java`, and the two empty `koush/` placeholders); they come from
-the same upstream tree.
+That is not a contradiction. Apache-2.0 is compatible with GPL-3.0 — GPL-3.0 carries a patent
+clause that covers Apache's — so the combined work is distributed under GPL-3.0, which is what the
+upstream `LICENSE` declares.
 
-Apache-2.0 is **incompatible with GPL-2.0** — its patent clause has no GPL-2.0 equivalent — which is
-why this directory stays a separate program. It communicates with `su` over a socket, and nothing
-here is linked against `kmod/` or `src/`.
+`kmod/` is GPL-2.0 because it is a kernel module, and GPL-3.0 is incompatible with the kernel.
+Nothing here is linked against it; the two sides talk over a socket.
 
 ## What this project changed in the protocol
 
@@ -52,9 +57,14 @@ here is linked against `kmod/` or `src/`.
 | `SuHelper.java` | Protocol wrapper |
 | `SuCheckerReceiver.java` | Root status check |
 | `lsu_Shell.java` | `libsuperuser` shell wrapper |
-| `phh_su.c` | Main `su` implementation (Apache-2.0) |
+| `phh_su.c` | Main `su` implementation |
 | `phh_su.h`, `su.h`, `utils.h` | Shared headers |
 | `activity.c`, `daemon.c`, `db.c` | Upstream activity / daemon / database layer |
+| `utils.c` | Shared helpers |
+| `pts.c`, `pts.h` | PTY handling for the shell |
+| `binds.c`, `binds.h` | Bind / unbind helper threads |
 | `hacks.c` | Platform shims |
 | `koush/su.c`, `koush/su.h` | Koush's original implementation, for comparison |
-| `Android.mk` | Upstream build file, incomplete here. It names `su/su.c`, which is `phh_su.c` under a different filename — the duplicate was dropped from this snapshot. |
+| `packageName` | Build input — the APK package name, passed as `-DREQUESTOR` |
+| `Android.mk` | Upstream build file. It names `su/su.c`, which is `phh_su.c` under a different filename. |
+| `LICENSE` | GPL-3.0, from upstream |

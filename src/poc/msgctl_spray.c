@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2026-43499 栈重塑实测：msgctl(IPC_SET, IPC_OLD) 部分栈写入
  *
  * 修复后的深度模型：

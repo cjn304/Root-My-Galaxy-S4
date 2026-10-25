@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * ionleak —— 验证 /dev/ion 分配的 buffer 是否清零
  *

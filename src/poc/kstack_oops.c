@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * kstack_oops — 模拟真实时序：线程先泄漏本线程内核栈地址，然后被 BUG 打死；
  *                紧接着新建一个线程，看它是否落到同一地址。

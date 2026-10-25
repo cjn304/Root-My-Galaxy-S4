@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 对比 IPC_OLD(1) 与 IPC_64(1|0x100) 的栈拷贝是否能留到 syscall 之后 */
 #define _GNU_SOURCE
 #include <stdio.h>

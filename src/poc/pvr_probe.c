@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * pvr_probe.c —— PVR bridge 可达性与 out 缓冲泄漏实测（S4 / PowerVR SGX544）
  *

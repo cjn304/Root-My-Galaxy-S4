@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* P2.4: 栈重塑验证（sendmmsg + recvmmsg 双喷）
  *
  * 目标：在 A 的悬空 pi_blocked_on (SP_entry-0x1B0) 处伪造 rt_mutex_waiter，

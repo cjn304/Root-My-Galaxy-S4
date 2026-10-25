@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * pvr_handle_scan.c —— 全局 KERNEL_HANDLE_BASE 的只读枚举探测
  *

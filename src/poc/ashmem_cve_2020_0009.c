@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2020-0009 ashmem 只读绕过 —— S4 设备实测（kernel 3.4.5-6264821）
  *
  * 来源：Project Zero bug 1949 / A-142938932（Android 公告 2020-01）

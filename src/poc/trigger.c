@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* P2.3 触发器 v1：命中 CVE-2026-43499 的 remove_waiter(current) 路径
  * 拓扑：A 持有 u3；B 持有 u2 且阻塞在 u3；A 在 u1 上 WAIT_REQUEUE_PI(u2)；
  *       C 执行 CMP_REQUEUE_PI(u1→u2) → 链走 B→u3→owner=A==top_task → -EDEADLK

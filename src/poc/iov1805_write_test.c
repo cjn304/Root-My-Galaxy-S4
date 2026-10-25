@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * iov1805_write_test.c — CVE-2015-1805 写原语自检（P4.2）
  *

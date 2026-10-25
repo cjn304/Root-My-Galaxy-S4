@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* P4.50 二分探针：只做与 sem_canary7 相同的早期内存布局动作就退出。
  * 用于区分 execvp 之后的卡死是 (a) mmap(0x4FFF0000) MAP_FIXED，
  * 还是 (b) sem_canary7 更后面的 futex/semtimedop 链。

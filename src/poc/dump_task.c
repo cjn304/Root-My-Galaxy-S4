@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* dump init_task 前 N 字节，用于校准 task_struct 偏移（P4.48） */
 #define _GNU_SOURCE
 #include <stdio.h>

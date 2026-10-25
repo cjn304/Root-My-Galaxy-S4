@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * binder 回包延迟测量：
  *   N 个线程各发 1 条同步事务到 handle 0（每线程只能挂 1 条），

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * cve2013test —— 判定 CVE-2013-6282（ARM get_user/put_user 缺 access_ok）
  *                在本机 3.4.5 上是否仍然存在

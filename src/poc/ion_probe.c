@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * ion_probe.c —— S4 (3.4.5) ION 可达性矩阵实测探针（只读探测，不破坏现场）
  *

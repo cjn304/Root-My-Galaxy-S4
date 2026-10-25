@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * warnprobe：在**同一条线程**上尝试各种 PI-futex 边界情况，
  * 目的不是利用，而是看哪一种能触发内核 WARN（dump_stack 会打印该线程的

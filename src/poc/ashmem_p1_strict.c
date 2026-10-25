@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2020-0009 —— P1 严格验证（S4 / 3.4.5）
  *
  * P2（remap_file_pages）已实测不成立：3.4 的 mm/fremap.c 是老实现，

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * CVE-2019-2215 binder+epoll UAF —— 3.4.5 (Exynos 5410)
  *

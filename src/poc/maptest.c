@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 测试低地址 mmap：0 页需要 CAP_SYS_RAWIO，0x8000+ 正常 */
 #define _GNU_SOURCE
 #include <stdio.h>

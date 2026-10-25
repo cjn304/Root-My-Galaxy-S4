@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * leakscan —— 在设备上遍历 /proc /sys，抓所有落在内核线性映射区
  *             (0xc0000000 - 0xe7800000) 的 8 位十六进制地址

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2016-9793 实测：SO_SNDBUFFORCE 的 val*2 整数溢出（P4.64）
  *
  * 源码形态（net/core/sock.c）：

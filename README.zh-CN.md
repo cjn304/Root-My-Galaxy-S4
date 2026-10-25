@@ -479,15 +479,18 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 
 ## 许可证
 
-三部分，三个不同的理由：
+三部分。条款不同，因为约束不同：
 
+- **`src/`、`scripts/`、`tools/` 是 GPL-3.0-or-later。** 它们是普通用户态程序，通过系统调用与内核
+  交互；没有任何东西把它们链接进内核代码，所以这里的许可是一种选择，而不是约束。
 - **`kmod/` 必须是 GPL-2.0。** 它是 Linux 内核模块：调用内核内部函数、遍历内核私有结构
   （`policydb`、`task_struct`），并被加载进一个 GPL-2.0-only 的内核。它还声明了
-  `MODULE_LICENSE("GPL")`，这是它能解析 `EXPORT_SYMBOL_GPL` 符号的前提。
-- **`src/`、`scripts/`、`tools/` 在本仓库里是 GPL-2.0，但不是必须。** 它们是普通用户态程序，
-  通过系统调用与内核交互；没有任何东西把它们链接进内核代码，所以完全可以改成 MIT 或 Apache-2.0。
-  它们采用 GPL-2.0 是因为本仓库这样分发，而不是技术上的约束。
-- **`su/` 是 Apache-2.0。** 它包含源自 phh's Superuser 的代码，而 phh 又承自 Koush 和 ChainsDD 的
-  Superuser —— 那个目录里每个带版权头的文件都写着 Apache-2.0。Apache-2.0 与 GPL-2.0 不兼容
-  （它的专利条款在 GPL-2.0 里没有对应物），所以 `su/` 保持为独立程序，通过 socket 与其余部分通信，
-  从不被链接进来。
+  `MODULE_LICENSE("GPL")`，这是它能解析 `EXPORT_SYMBOL_GPL` 符号的前提。这里不能用 GPL-3.0 ——
+  它与内核的许可不兼容。`kmod/LICENSE` 放的是 GPL-2.0 全文，文件头写的是
+  `SPDX-License-Identifier: GPL-2.0`。
+- **`su/` 是 GPL-3.0**，与它自己的上游 `LICENSE` 一致。它的许多 `.c` 文件仍带着 ChainsDD/Koush
+  时代的 Apache-2.0 头；Apache-2.0 与 GPL-3.0 兼容（GPL-3.0 有对应的专利条款），所以整个 `su/`
+  以 GPL-3.0 分发。
+
+`src/`、`scripts/`、`tools/` 和 `kmod/` 下的每个源文件都以一行 `SPDX-License-Identifier` 开头，
+所以每个文件的条款都是明确的。

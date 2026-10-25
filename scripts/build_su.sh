@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # 编译 su（ARM32 静态 + 静态 sqlite3）。
 #
 # 命令来源：P4.18 记录的原始构建（当时产出 753,912 B，与现役二进制一字节不差）：

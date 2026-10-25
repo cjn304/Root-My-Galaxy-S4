@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* bench_toggle.c — 测 munmap/mmap 与 mprotect 翻转一页的耗时 */
 #define _GNU_SOURCE
 #include <stdio.h>

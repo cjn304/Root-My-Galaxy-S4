@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 用 semop 阻塞：sembuf[32] 走 fast_sops(栈)，blocked 期间数据常驻 */
 #define _GNU_SOURCE
 #include <stdio.h>

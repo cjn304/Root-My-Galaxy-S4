@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* diag_protnone.c — PROT_NONE 页对内核 copy_from_user/copy_to_user 是否真的不可访问 */
 #define _GNU_SOURCE
 #include <errno.h>

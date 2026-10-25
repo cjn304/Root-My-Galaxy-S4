@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * kstack_reuse — 测「线程死后内核栈地址能否被新线程复用」
  *

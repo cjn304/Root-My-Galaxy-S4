@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* P2.2 探针 v1：环境自检 + futex PI 原语功能验证（不触发 CVE）
  * 编译：zig cc -target arm-linux-musleabi -static -O2 -pthread -o probe probe.c
  */

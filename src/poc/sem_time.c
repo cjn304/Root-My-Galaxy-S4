@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 测 semtimedop 路径下 fast_sops 的栈深度 D（P4.45）
  *
  * 目的：semop 路径实测 D = 0x1DE8（mod 6 = 0），所以 waiter+0x2C（数组+0x3C）

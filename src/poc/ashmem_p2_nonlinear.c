@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2020-0009 —— P2 补测：非线性 remap_file_pages（P4.63）
  *
  * 上一版用 pgoff=0，正好等于 linear_page_index(vma,start)=0，

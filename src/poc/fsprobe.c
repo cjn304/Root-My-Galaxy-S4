@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * fsprobe — 打印凭据与各路径写入的精确 errno（P4.27 排查用）
  * 注意：不要用 setfsuid(-1) 读 fsuid——CAP_SETUID 生效时它会把 fsuid 真的设成 -1，

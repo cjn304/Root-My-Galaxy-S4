@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * leakfuzz5 —— 最后一批 syscall 输出结构体
  *

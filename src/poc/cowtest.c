@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * cowtest —— dirtycow (CVE-2016-5195) 前置能力测试
  * 只测权限和原语可用性，不执行真正的竞态利用（不会修改任何文件）

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """P1.2b: 针对性策略查询
 问题：
  Q1 sid=kernel(1) 主体能做什么（commit_creds(prepare_kernel_cred(0)) 之后的能力边界）

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """P1.2: 纯 Python policydb v26 解析器
 格式依据：本工作区内核源码 security/selinux/ss/policydb.c / avtab.c / conditional.c / ebitmap.c
 （Samsung 3.4.5，policyvers=26，MLS=1，sym_num=8，ocon_num=7）

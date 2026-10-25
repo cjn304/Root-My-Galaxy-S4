@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * ion_race.c —— ION SHARE/FREE 竞态探针（低强度，只证明窗口存在）
  *

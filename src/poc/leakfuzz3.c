@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * leakfuzz3 —— 全量候选覆盖（表驱动）
  *

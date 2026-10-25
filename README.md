@@ -491,17 +491,20 @@ fails, and that check exists for a reason.
 
 ## License
 
-Three parts, three different reasons:
+Three parts. The terms differ because the constraints differ:
 
+- **`src/`, `scripts/`, `tools/` are GPL-3.0-or-later.** They are ordinary userland programs
+  talking to the kernel through syscalls; nothing links them against kernel code, so the licence
+  here is a choice rather than a constraint.
 - **`kmod/` must be GPL-2.0.** It is a Linux kernel module: it calls kernel-internal functions,
   walks kernel-private structures (`policydb`, `task_struct`) and is loaded into a GPL-2.0-only
-  kernel. It also declares `MODULE_LICENSE("GPL")`, which is what allows it to resolve
-  `EXPORT_SYMBOL_GPL` symbols at all.
-- **`src/`, `scripts/`, `tools/` are GPL-2.0 here, but do not have to be.** They are ordinary
-  userland programs talking to the kernel through syscalls; nothing links them against kernel
-  code, so they could be MIT or Apache-2.0. They carry GPL-2.0 because that is how this repository
-  is distributed, not because of a technical constraint.
-- **`su/` is Apache-2.0.** It carries code derived from phh's Superuser, which itself descends
-  from Koush's and ChainsDD's Superuser — every file there that has a header says Apache-2.0.
-  Apache-2.0 is incompatible with GPL-2.0 (the patent clause has no GPL-2.0 equivalent), so `su/`
-  stays a separate program that talks to the rest over a socket and is never linked into it.
+  kernel. It also declares `MODULE_LICENSE("GPL")`, which is what lets it resolve
+  `EXPORT_SYMBOL_GPL` symbols at all. GPL-3.0 cannot be used here — it is incompatible with the
+  kernel's licence. `kmod/LICENSE` carries the GPL-2.0 text, and the file header says
+  `SPDX-License-Identifier: GPL-2.0`.
+- **`su/` is GPL-3.0**, matching its own `LICENSE` file from upstream. Many of its `.c` files still
+  carry Apache-2.0 headers from the ChainsDD/Koush era; Apache-2.0 is compatible with GPL-3.0
+  (GPL-3.0 has a matching patent clause), so the whole of `su/` is distributed as GPL-3.0.
+
+Every source file in `src/`, `scripts/`, `tools/` and `kmod/` starts with an
+`SPDX-License-Identifier` line, so the terms are unambiguous per file.

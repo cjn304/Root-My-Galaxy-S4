@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * targets.h — 机型/build 适配表（P4.29）
  *

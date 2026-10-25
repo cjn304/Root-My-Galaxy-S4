@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 探测真实 pi_state->pi_mutex 的现场（P4.46）
  *
  * 目的：endgame 唯一现实的目标是「一个有等待者的真实 rt_mutex」。

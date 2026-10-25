@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2026-43499 / GhostLock —— 两阶段 harness（P4.44）
  *
  * 与 P4.43 的关键差别：**先泄漏 stack，再调 semop**

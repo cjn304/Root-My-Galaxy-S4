@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * iov1805_test.c — CVE-2015-1805 越界自检（P3.2 v5：writev + 竞态）
  *

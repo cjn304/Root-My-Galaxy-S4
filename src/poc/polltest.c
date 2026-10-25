@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 正向验证：poll() 会把 nfds<=32 的 pollfd 数组拷到内核栈（POLL_STACK_ALLOC=256） */
 #define _GNU_SOURCE
 #include <stdio.h>

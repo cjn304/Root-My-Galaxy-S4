@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * statfs_leak2 —— 复现 f_spare 残值，并判定它属于哪个栈
  *

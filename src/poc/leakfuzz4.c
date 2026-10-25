@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * leakfuzz4 —— 补齐用户点名的候选
  *

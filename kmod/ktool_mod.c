@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * ktool_mod.c — minimal LKM interface for ktool
  *

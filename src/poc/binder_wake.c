@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * CVE-2019-2215 wake 路径触发链（P2.10 §2.3 设计）
  *

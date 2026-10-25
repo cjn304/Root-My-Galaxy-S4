@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2026-43499 / GhostLock —— 金丝雀：受控间接调用（P4.48）
  *
  * 目标：证明能把 waiter 插进真实 rt_mutex，并让内核用**我们伪造的 task_struct**

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * dirtycow_canary —— 行为级验证 CVE-2016-5195 是否已修
  *

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # -*- coding: utf-8 -*-
 """P4.92 只读侦察：从 sepolicy 二进制取出 avtab 插入所需的数值。
 

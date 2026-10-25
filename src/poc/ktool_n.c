@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * ktool.c — CVE-2015-1805 内核读写工具（P4.3）
  *

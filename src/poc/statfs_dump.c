@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * statfs_dump —— 逐字段打印 statfs 返回值，判定 d3609fe8 属于哪个字段
  */

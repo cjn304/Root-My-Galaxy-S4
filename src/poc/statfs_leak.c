@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * statfs_leak —— 验证 statfs 的 f_spare 泄漏是否指向调用线程自己的内核栈
  *

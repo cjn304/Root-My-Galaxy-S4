@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 让 poll 停在 syscall 内部：pollfd 数组按 N_STACK_PPS=31 拷到内核栈后阻塞 */
 #define _GNU_SOURCE
 #include <stdio.h>

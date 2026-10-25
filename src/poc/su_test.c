@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * su.c — GT-I9500 su（ktool + phh Superuser APK 授权，fork 版）
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* fstest — 判定 setfsgid/setfsuid 失败的确切原因（P4.27 诊断） */
 #include <stdio.h>
 #include <errno.h>

@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # 部署 su 到 /system/xbin（PC 侧脚本，走 adb）。
 #
 # 旧版是设备侧 sh，有两处过时/危险行为，已废弃：

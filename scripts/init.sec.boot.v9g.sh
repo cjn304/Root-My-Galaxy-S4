@@ -1,4 +1,6 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 
 echo "init.sec.boot.sh: start" > /dev/kmsg
 

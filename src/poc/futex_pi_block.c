@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * futex_pi_block — 让一个线程稳定阻塞在 PI futex 上，供外部测量
  *

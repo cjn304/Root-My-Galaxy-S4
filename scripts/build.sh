@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # 编译 ktool（ARM32 静态）。
 #
 # 最早用 `zig cc -target arm-linux-musleabi`，后来改用 GNU 交叉工具链静态链接。

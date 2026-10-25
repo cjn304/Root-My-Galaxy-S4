@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Full install: ktool (exploit + toolbox) and su (the root front-end apps talk to).
 #
 #   ./install.sh

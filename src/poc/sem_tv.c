@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* 验证 semtimedop 路径下 waiter->lock 是否 32 位全可控（P4.45）
  *
  * 零风险：不触发 rt_mutex_adjust_prio_chain，只用模块 kread 回读 waiter+0x2C。

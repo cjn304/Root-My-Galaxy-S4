@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* CVE-2026-43499 / GhostLock —— semop 阻塞态载体（P4.41）
  *
  * 与旧 harness 的区别：

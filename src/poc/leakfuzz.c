@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * leakfuzz —— 找「内核把未初始化栈字节拷回用户态」的 syscall
  *

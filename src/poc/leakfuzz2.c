@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * leakfuzz2 —— padding 型内核栈泄漏探测
  *

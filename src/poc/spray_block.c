@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* P2.4c: 活帧喷灌终版（纯 recvmmsg）
  *
  * 事实（三次崩溃现场实测）：

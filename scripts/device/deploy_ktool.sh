@@ -1,4 +1,6 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Device-side ktool replacement. Launched by scripts/deploy_ktool.sh through
 # `ktool pwn`, so by the time this runs we are uid 0 and permissive_map is set.
 #

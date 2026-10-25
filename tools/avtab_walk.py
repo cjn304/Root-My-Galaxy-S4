@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # -*- coding: utf-8 -*-
 """P4.92 只读侦察：按 avtab 哈希走一条桶链，验证 key/node 布局。
 

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* P2.4d: pselect6 活帧喷灌（保留 waiter +0x00..+0x1f 的自指残留）
  *
  * 关键几何（实测校准）：

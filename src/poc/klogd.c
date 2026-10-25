@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* klogd: 流式读内核日志（SYSLOG_ACTION_READ），用于抓 panic 现场 */
 #define _GNU_SOURCE
 #include <unistd.h>

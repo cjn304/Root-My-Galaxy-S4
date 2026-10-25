@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * appwrite — 用「目标 app 的 fsuid + untrusted_app 域」写文件（P4.27）
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * su.c — GT-I9500 minimal su（ktool 后端）
  *

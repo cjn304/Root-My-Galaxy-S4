@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 /*
  * ion_spray.c —— ION 作为 kmalloc-32 spray 工具的可行性实测
  *
