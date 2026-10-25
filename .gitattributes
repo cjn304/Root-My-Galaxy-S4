@@ -1,0 +1,21 @@
+# 换行统一为 LF。
+#
+# 这不是洁癖：设备侧的 mksh 遇到 CRLF 会报 `syntax error: 'do' unexpected`，
+# 而且整脚本一条都不执行（P4.93 记录的真实事故）。Windows 上 clone 下来
+# 直接 push 到设备，必须保证 LF。
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.c    text eol=lf
+*.h    text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.mk   text eol=lf
+Makefile text eol=lf
+
+# 二进制
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.apk  binary
+*.ko   binary

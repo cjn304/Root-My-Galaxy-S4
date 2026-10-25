@@ -1,0 +1,42 @@
+# 构建产物
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+*.symvers
+*.order
+.tmp_versions/
+*.a
+*.so
+
+# 编译出的可执行文件（用 scripts/build*.sh 现编，不入库）
+src/ktool
+src/su_new
+src/su
+ktool
+su_new
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 设备 dump、分析中间产物、日志（体积大或含隐私）
+*.apk
+*.img
+*.cpio
+*.cpio.gz
+*.lzo
+*.bin
+*.mhtml
+*.pdf
+kallsyms.txt
+sepolicy
+sepolicy_rules.txt
+*.log
