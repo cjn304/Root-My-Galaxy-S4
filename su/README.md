@@ -1,36 +1,43 @@
-# 配套 APK 侧改动
+# APK-side changes
 
-这里是从 **phh's Superuser** 派生的部分：`RequestActivity` / `Settings` / `SuHelper` 等
-Java 源码，以及授权数据库的适配层（`activity.c` / `db.c` / `phh_su.c`）。
+Everything in this directory is derived from **phh's Superuser**: the `RequestActivity` /
+`Settings` / `SuHelper` Java sources, plus the authorization database layer
+(`activity.c`, `db.c`, `phh_su.c`).
 
-原始版权头均保留在各文件内。
+Original copyright headers are kept in each file.
 
-## 许可证
+## License
 
-phh's Superuser 采用 **GPL-3.0**。本目录作为其派生物，沿用 GPL-3.0。
+phh's Superuser is **GPL-3.0**. This directory is a derivative and stays GPL-3.0.
 
-根目录的 GPL-2.0 **只覆盖** `src/`、`kmod/`、`scripts/`、`tools/`。
-两者是独立程序（通过 socket 协议通信，不是链接关系），因此可以在同一仓库共存。
+The GPL-2.0 at the repository root covers `src/`, `kmod/`, `scripts/` and `tools/` only.
+The two are separate programs — they communicate over a socket protocol rather than by
+linking — so both licenses can coexist in one repository.
 
-## 说明
+## Notes
 
-- **APK 本体不分发**。请从 phh 上游获取并用你自己的 key 签名。
-- `su` 二进制（`../src/su_fork.c`）与 APK 之间走 phh 的 socket 授权协议：
-  su 在 `/data/local/tmp/sud/s<pid>` 建监听，通过 `am start` 拉起授权界面，
-  APK 连上 socket 后写 `ALLOW` / `DENY`。
-- 本项目对该协议的改动：`SO_PEERCRED` 只认管理 App 的 uid（防止任意应用抢连伪造授权）、
-  四档策略（`persist.sys.root_access`）、管理 App 可通过 stdin 改档。
+- **The APK is not distributed here.** Either build it from these sources and sign it with
+  your own key, or install the published build:
+  https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
+- The su binary (`../src/su_fork.c`) speaks phh's socket protocol: it listens on
+  `/data/local/tmp/sud/s<pid>`, launches the prompt via `am start`, and the app replies
+  `ALLOW` / `DENY` over that socket.
+- What this project changed in that protocol: `SO_PEERCRED` accepts only the managing app's
+  uid (so no other app can connect first and forge an `ALLOW`), four-tier policy through
+  `persist.sys.root_access`, and the managing app can switch tiers over stdin.
 
-## 目录
+## Files
 
-| 文件 | 作用 |
+| File | Purpose |
 |---|---|
-| `RequestActivity.java` | 授权弹窗 |
-| `MultitaskSuRequestActivity.java` | 多任务场景下的弹窗变体 |
-| `Settings.java` | 设置页（四档切换） |
-| `SuHelper.java` | 与 su 的协议封装 |
-| `SuCheckerReceiver.java` | root 状态检查 |
-| `lsu_Shell.java` | `libsuperuser` 的 shell 封装 |
-| `phh_su.c` / `db.c` / `activity.c` | 原生侧授权库与数据库 |
-| `daemon.c` / `hacks.c` | 常驻逻辑与平台适配 |
-| `koush/` | Koush Superuser 的兼容层 |
+| `RequestActivity.java` | Permission prompt |
+| `MultitaskSuRequestActivity.java` | Prompt variant for multi-window |
+| `Settings.java` | Settings screen (four tiers) |
+| `SuHelper.java` | Protocol wrapper around su |
+| `SuCheckerReceiver.java` | Root status check |
+| `lsu_Shell.java` | `libsuperuser` shell wrapper |
+| `phh_su.c` / `db.c` / `activity.c` | Native authorization library and database |
+| `daemon.c` / `hacks.c` | Daemon logic and platform shims |
+| `su.c` / `su.h` / `phh_su.h` / `utils.h` | Reference su implementation and shared headers |
+| `Android.mk` | Build file |
+| `koush/` | Koush Superuser compatibility layer |

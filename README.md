@@ -16,12 +16,15 @@ No boot image flashing, no recovery, no writes to `selinuxfs` — so the **KNOX 
 ### 2. Install
 
 ```sh
-./scripts/deploy_ktool.sh              # uses src/ktool
-./scripts/deploy_ktool.sh ./ktool      # or a downloaded binary
+./scripts/deploy_ktool.sh
 ```
 
 One shot: push, escalate, flush, remount, replace, restore. Prints `DEPLOY_OK` and the final
 SELinux state. Need a binary? See [Building](#building).
+
+Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
+
+https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
 ### 3. Verify
 
