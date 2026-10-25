@@ -3,6 +3,10 @@
 Runtime root + surgical SELinux policy patching on the Samsung Galaxy S4 (GT-I9500 / Exynos 5410).
 No boot image flashing, no recovery, no writes to `selinuxfs` — so the **KNOX Warranty Bit is never tripped**.
 
+With the boot script installed, root survives reboots. KNOX apps keep working normally. Smart
+Manager occasionally reports "unauthorized actions have been detected" — that is its integrity
+check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
+
 ---
 
 ## How to use
