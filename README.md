@@ -178,9 +178,9 @@ real. But the trigger path BUGs inside a `pi_lock` critical section, killing the
 still holds a real lock; softlockup panics roughly 27 seconds later. It is not a missing leak, it
 is a self-defeating one.
 
-### plist vs rbtree: the actual gate
+### GhostLock availability
 
-The dependency does not come from how many nodes a rebalance touches. It comes from whether the
+What decides whether this chain works is not how many nodes a rebalance touches. It is whether the
 kernel **validates** the node before dereferencing it.
 
 On 3.4, `CONFIG_DEBUG_LIST=y` together with `CONFIG_SEC_DEBUG_LIST_PANIC` makes `list_debug` a
@@ -191,35 +191,29 @@ check or panics.
 
 `lib/rbtree.c` (401 lines in this tree) has **no runtime validation at all** — no `DEBUG_RBTREE`,
 no `__rb_erase_valid`, nothing in `rb_insert_color`. It dereferences and moves on, so a forged
-`rb_node` does not have to be self-consistent.
+`rb_node` does not have to be self-consistent. `rb_insert_color` also hands over the stack address
+for free while rebalancing, which is why the same bug is far easier on newer kernels.
 
-That one difference decides the whole route:
-
-| Kernel | `waiter` is | Node validated? | External read primitive needed? |
-|---|---|---|---|
-| 3.4 / 3.10 (S4, S5, S6) | `plist_node` | yes — `udf` | **yes**, and specifically a *stack* address |
-| 3.14+ / 5.x / 6.x (S7 and later) | `rb_node` | no | **no** |
-
-On top of that, `rb_insert_color` gives the stack address away for free while rebalancing. That is
-why the same bug is far easier on newer kernels: no `DEBUG_LIST`, and no external leak required.
-
-### GhostLock and ION across generations
-
-Only the S4 row is backed by device work in this repository.
-
-| Generation | `waiter` | GhostLock alone | GhostLock + ION | Basis |
+| Kernel | `waiter` is | Node validated? | External read primitive | GhostLock alone |
 |---|---|---|---|---|
-| S4 and older (3.0 – 3.4) | plist | **no** | **no** | The plist path requires a self-consistent node, which requires the target thread's **stack** address. ION's infoleak returns a **kernel heap** address (measured on the S4: `handle = 0xd8aed780`), while the forged `node_list` has to point at `waiter + 0x0C` on the stack. Heap is not stack, so the leak does not close the gap. ION's SHARE/FREE race only ever won a refcount — a leak, not memory corruption. |
-| S5 / S6 (3.4 / 3.10) | plist | **no** | **no** | Same structure. S5 firmware additionally measured `CONFIG_DEBUG_LIST=y` with a `panic()` instead of `udf` — same effect, different instruction. Note S5's ION is the Qualcomm msm implementation, so its attack surface is *larger* than the S4's, but it still only matters if it yields real read/write. |
-| S7 and newer (4.4+) | rb_node | plausible | not needed | No node validation, and rebalancing leaks the stack address by itself. Public chains exist; none verified here. |
+| 3.4 / 3.10 (S4, S5, S6) | `plist_node` | yes — `udf` | **required**, and must be a *stack* address | **no** |
+| 3.14+ / 5.x / 6.x (S7 and later) | `rb_node` | no | not required | plausible |
+
+S5 firmware confirms the pattern from the other side: `CONFIG_DEBUG_LIST=y` again, but with a
+`panic()` instead of `udf` — same effect, different instruction. S6 uses the same plist structure.
+Public chains for S7 and later exist; none verified here.
 
 This leaves the S4 in an awkward position: the only thing that can hand over a stack address is
-CVE-2015-1805 itself — and once you have arbitrary read/write, GhostLock adds nothing. That is why
+CVE-2015-1805 itself, and once you have arbitrary read/write, GhostLock adds nothing. That is why
 this project does not use the chain at all, and why "GhostLock alone" is not a route on **any**
 plist kernel, not just this one.
 
-If an ION bug existed that gave a genuine read/write primitive rather than an infoleak, the S4
-column would change. The audit did not find one; the TOCTOU race only leaked a reference.
+ION does not rescue it either. Its infoleak returns a **kernel heap** address (measured on the S4:
+`handle = 0xd8aed780`), while the forged `node_list` has to point at `waiter + 0x0C` on the
+**stack**. Heap is not stack. The SHARE/FREE race only ever won a refcount — a leak, not memory
+corruption — so it yields no read primitive. Had some other ION bug provided real read/write, the
+S4 row would change; the audit did not find one. Note that the S5 ships the Qualcomm msm ION rather
+than Samsung's, so its attack surface is larger and needs its own audit.
 
 ---
 
