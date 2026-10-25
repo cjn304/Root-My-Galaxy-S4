@@ -34,9 +34,9 @@
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
-它的源码没有收录在本仓库；需要改 APK 的话去 https://github.com/phhusson/Superuser。本项目发布的
-`su` 二进制（`src/su_fork.c`）是同一套 socket 协议的独立实现，只用这个文件和 `src/sqlite3.c`
-构建。
+源码：https://github.com/phhusson/Superuser
+
+本项目发布的 `su` 二进制（`src/su_fork.c`）是同一套 socket 协议的独立实现。
 
 > **四档。** `0` 全拒，`1` 只放应用，`2` 只放 ADB，`3` 应用 + ADB。`adb shell su` 在 2 和 3 两档
 > 下不弹窗直接放行；应用请求始终要走 allowlist 和 phh 弹窗。本机实测：`0` 和 `1` 拒绝 uid 2000，

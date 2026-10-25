@@ -35,9 +35,10 @@ Root prompts on the app side are handled by **phh's Superuser** — install it b
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
-Its source is not vendored here; take it from https://github.com/phhusson/Superuser if you need to
-change the APK. The `su` binary this project ships (`src/su_fork.c`) is an independent
-implementation of the same socket protocol, built from that file plus `src/sqlite3.c`.
+Source: https://github.com/phhusson/Superuser
+
+The `su` binary this project ships (`src/su_fork.c`) is an independent implementation of the same
+socket protocol.
 
 > **Tiers.** `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. `adb shell su` works
 > without a prompt in tiers 2 and 3; app requests always go through the per-app allowlist and the
