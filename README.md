@@ -9,80 +9,31 @@ No boot image flashing, no recovery, no writes to `selinuxfs` — so the **KNOX 
 
 ### 1. Prerequisites
 
-- A GT-I9500 on `LRX22C.I9500ZSSHQD1` / kernel `3.4.5-6264821` (other builds: see [Porting](#porting-to-another-device))
-- An ARM32 cross toolchain (`arm-none-linux-gnueabihf-`)
-- `adb`, and the device reachable over USB
-- **One-time** arbitrary kernel read/write on the device. This project is the payload that runs *after* you have it — the exploit itself (CVE-2015-1805) is in `src/ktool.c` and is entered by simply running the binary.
+- Samsung Galaxy S4 **GT-I9500** on `LRX22C.I9500ZSSHQD1` / kernel `3.4.5-6264821`
+  (other builds: see [Porting](#porting-to-another-device))
+- `adb` on your PC, device connected over USB
 
-### 2. Build
-
-```sh
-./scripts/build.sh                  # toolchain on PATH
-TOOLCHAIN=/opt/arm/bin ./scripts/build.sh   # or point at it
-```
-
-Produces `src/ktool`, a static ARM32 ELF (~423 KB).
-
-### 3. Install — one command
+### 2. Install
 
 ```sh
-./scripts/deploy_ktool.sh
+./scripts/deploy_ktool.sh              # uses src/ktool
+./scripts/deploy_ktool.sh ./ktool      # or a downloaded binary
 ```
 
-That is the whole install. It does push → escalate → flush → remount rw → replace →
-chown/chmod/chcon → remount ro → self test → restore, in one adb round trip, and prints
-`DEPLOY_OK` plus the final `Enforcing` state. There is no separate "now close permissive" step:
-`restore` is the last thing it runs, on every path including failures.
+One shot: push, escalate, flush, remount, replace, restore. Prints `DEPLOY_OK` and the final
+SELinux state. Need a binary? See [Building](#building).
 
-Two things it handles that are easy to get wrong by hand:
-
-- **`flush` before `remount`.** `pwn` only makes *new* verdicts permissive; a cached
-  `shell -> filesystem { remount }` deny keeps winning. Skip it and you get
-  `mount: Permission denied` while permissive is demonstrably on.
-- **It escalates with the new binary itself.** The script lives in `/data/local/tmp`
-  (`shell_data_file`), which `shell` can execute and `init_shell` cannot — so `su -c sh ...`
-  would fail. It runs through `ktool pwn` instead.
-
-`./scripts/deploy_su.sh` is the same pattern for the `su` binary.
-
-<details>
-<summary>Manual install, if you want to see every step</summary>
+### 3. Verify
 
 ```sh
-adb push src/ktool /data/local/tmp/ktool_new
-adb shell chmod 755 /data/local/tmp/ktool_new
-adb shell '/data/local/tmp/ktool_new pwn /system/bin/sh -c "
-    /data/local/tmp/ktool_new flush -y 2>/dev/null;
-    mount -o rw,remount /system &&
-    cp /data/local/tmp/ktool_new /system/bin/ktool &&
-    chown root:root /system/bin/ktool &&
-    chmod 700 /system/bin/ktool &&
-    chcon u:object_r:system_file:s0 /system/bin/ktool &&
-    mount -o ro,remount /system"'
-adb shell su -c '/system/bin/ktool restore'
+adb shell '/system/bin/ktool target'    # must say "verified: yes"
+adb shell 'getenforce'                  # Enforcing
+adb shell 'su -c id'                    # uid=0, context=u:r:init_shell:s0
 ```
 
-</details>
-
-### 4. Verify
-
-```sh
-adb shell '/system/bin/ktool target'          # addresses + offsets, must say "verified: yes"
-adb shell '/system/bin/ktool backend probe'   # real race read of init_task
-adb shell 'getenforce'                        # Enforcing
-adb shell 'su -c id'                          # uid=0, context=u:r:init_shell:s0
-```
-
-### 5. Kernel module and boot persistence
-
-If the module is not installed yet, `ktool boot /system/lib/modules/ktool_mod.ko` does the three
-steps in one shot: `lkmauth_bootmode=2`, full permissive, then `insmod`.
-
-Then install `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. It re-patches,
-`insmod`s the module, applies the avtab rules and restores Enforcing on every boot.
-
-> This file **must be LF**. Saved as CRLF, mksh aborts with `syntax error: 'do' unexpected`
-> and executes *nothing* — no patch, no module, no permissive, and `su` stops working entirely.
+Boot persistence is optional: `ktool boot /system/lib/modules/ktool_mod.ko`, then install
+`scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. Keep it **LF** — CRLF makes
+mksh abort before running a single line.
 
 ---
 
