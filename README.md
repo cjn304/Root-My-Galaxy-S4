@@ -54,10 +54,10 @@ It revokes the 8 avtab rules, flushes AVC, restores the stock boot script (from
 `/data/local/tmp/init.sec.boot.sh.orig` if that backup exists, otherwise by deleting the marked
 block and syntax-checking the result), then deletes the `/system` files and wipes `/data`.
 
-The `sys_execve` patch is dropped **last**, on purpose. Everything before it needs a working exec
-as root — remount, `cp`, `rm`, `sh -n` — so undoing the patch first would put the KNOX branch back
-and make every one of those fail. Once it is dropped, only `adb shell` (uid 2000) can still exec,
-which is exactly enough for the final `/data` cleanup.
+The order at the end is not arbitrary. `rmmod` runs **before** `enforce`, because unloading the
+module needs `CAP_SYS_MODULE` and the `shell` domain is not granted it — the permissive window opened
+at the start is what lets it through. The `sys_execve` patch is dropped **last**: after that, root
+exec is refused, and only `adb shell` (uid 2000) can still run the final `/data` cleanup.
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 

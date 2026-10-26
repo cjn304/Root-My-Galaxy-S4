@@ -53,9 +53,10 @@
 `/data/local/tmp/init.sec.boot.sh.orig` 备份就用它，否则删掉标记块再做语法检查），然后删掉
 `/system` 上的文件、清空 `/data`。
 
-`sys_execve` 补丁放在**最后一步**撤。它之前的所有操作都需要以 root 身份成功 exec —— remount、
-`cp`、`rm`、`sh -n` —— 先撤补丁会让 KNOX 分支回来，这些操作全部失败。撤掉之后只有 `adb shell`
-（uid 2000）还能 exec，这刚好够最后清理 `/data` 用。
+最后几步的顺序不是随意的。`rmmod` 在 `enforce` **之前**：卸载模块需要 `CAP_SYS_MODULE`，而
+`shell` 域没有被授予这个能力 —— 全靠开头打开的那个 permissive 窗口才过得去。`sys_execve` 补丁
+放在**最后**撤：撤完之后 root 的 exec 被拒，只有 `adb shell`（uid 2000）还能跑最后的 `/data`
+清理。
 
 应用侧的 root 弹窗由 **phh's Superuser** 处理，授权前先装上它：
 
