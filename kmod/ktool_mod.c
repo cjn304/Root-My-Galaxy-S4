@@ -6,7 +6,6 @@
  *   echo "root <pid>" > /dev/ktool   给指定进程提权（kernel 域）
  *   echo "root"       > /dev/ktool   给写接口的当前进程提权（kernel 域）
  *   echo "ish"        > /dev/ktool   当前进程 -> uid 0 + u:r:init_shell:s0
- *   echo "restore"    > /dev/ktool   完整回滚
  *   cat /dev/ktool                   查看当前进程的 uid / SID
  *
  * /dev/ktool 在 init 时被重标为 null_device，shell 域在 enforcing 下也能写。
@@ -56,7 +55,7 @@
  *      get_task_mm() 已导出，get_mm_exe_file() 未导出但走 kallsyms。
  *   2. 比字符串不比 dentry（P4.24 实测 dentry 比较对 su 失效），
  *      且必须 /system/ 前缀：app 无法写 /system，/data 下的冒充进不来。
- *   3. 域门砍掉：管理命令（w32/permissive/patch/boot/root/restore...）
+ *   3. 域门砍掉：管理命令（w32/permissive/patch/boot/root/...）
  *      由 /system/bin/ktool 用户态自己做（自带 do_root exploit），
  *      不经过 /dev/ktool。过 /dev/ktool 的只有 su 发的 ish/ctx，
  *      所以这里只需要路径一道门。
@@ -176,7 +175,7 @@ static int ktool_gate_ok(void)
 
 static int ktool_allow(const char *kbuf)
 {
-	/* 只有这三个命令需要过 /dev/ktool，其余（root/restore/w32/...）走 ktool 用户态 */
+	/* 只有这三个命令需要过 /dev/ktool，其余（root/w32/...）走 ktool 用户态 */
 	int priv = !strncmp(kbuf, "ish", 3) || !strncmp(kbuf, "ctx ", 4) ||
 		   !strncmp(kbuf, "avrule", 6) || !strncmp(kbuf, "avset", 5) ||
 		   !strncmp(kbuf, "avcflush", 8) || !strncmp(kbuf, "warntest", 8) ||
@@ -193,7 +192,7 @@ static int ktool_allow(const char *kbuf)
 	/*
 	 * ctx / avcflush 额外放行「已经是 uid0」的进程（P4.27）：
 	 * appwrite 由 su/root 拉起（uid0）后要 ctx 到 untrusted_app 写 app 数据；
-	 * ktool restore --flush 要 uid0 才能清 AVC。app 永远到不了 uid0，
+	 * avcflush 要 uid0 才能清 AVC。app 永远到不了 uid0，
 	 * 所以这条不放宽攻击面。
 	 */
 	if ((!strncmp(kbuf, "ctx ", 4) || !strncmp(kbuf, "avrule", 6) ||
@@ -222,19 +221,10 @@ MODULE_DESCRIPTION("ktool minimal kernel interface");
 /* 地址/偏移全部来自 targets.h；tgt 在 init 里按 ktool_target 选定 */
 static const struct ktool_target *tgt;
 
-#define PERM_MAP	(tgt->permissive_map)
-#define PERM_BASE	(tgt->modprobe_path)
-#define EXEC_BR		(tgt->exec_br)
-#define EXEC_BR_ORIG	(tgt->exec_br_orig)
+/* permissive_map / modprobe_path / exec_br 由用户态 ktool 直接读写，模块不再引用 */
 #define TASK_REAL_CRED	(tgt->off_task_real_cred)
 #define TASK_CRED	(tgt->off_task_cred)
 #define TASK_COMM	(tgt->off_task_comm)
-
-static void kw32(unsigned long addr, u32 val)
-{
-	*(volatile u32 *)addr = val;
-	wmb();
-}
 
 
 /*
@@ -816,7 +806,7 @@ static int ktool_avrule(int src, int tgt, int cls, u32 mask)
  *
  * 为什么需要它：AVC 条目在**计算时**就把 AVD_FLAGS_PERMISSIVE 烤进了
  * avd->flags，所以 permissive_map 清零后，已缓存的三元组仍然按 permissive
- * 放行 —— 这就是"restore 不彻底、必须重启"的根因。
+ * 放行 —— 这就是"permissive_map 清了但 remount 还是被拒"的根因。
  *
  * 为什么用 avc_ss_reset 而不是自己遍历链表：
  *   它是内核自己的 API（security_load_policy 也用它），内部按 slot 加
@@ -840,50 +830,6 @@ static int ktool_avcflush(void)
 	return 0;
 }
 
-/*
- * restore —— 全部还原（P4.88 修订）
- *
- *   avc_ss_reset(0)          清 AVC 缓存（内核官方 API，security_load_policy
- *                            内部也用它，按 slot 加锁 + call_rcu，安全）
- *   permissive_map 清零
- *   modprobe_path 还原
- *   exec_br 还原             ← 单向门，见下
- *
- * **P4.88 删掉了原来的 ktool_stop_auditd()**，理由（都是实测，不是推理）：
- *   1. P4.12 把 RST_STAT=0x200 复位归因于"清 AVC 造成审计风暴"，
- *      但 2026-10-24 的实验证明：SecurityLogAgent/auditd/kauditd 全活着时，
- *      avc_ss_reset 之后 12 秒连续采样，audit.log 一个字节都没涨，uptime 连续，
- *      无复位。风暴不存在。
- *   2. 真正致命的是杀 auditd：它是 audit netlink 的唯一消费者，杀掉之后
- *      kauditd 空转、backlog 无人排，才会 audit: backlog limit exceeded。
- *      P4.12 的复位条件 = 杀 auditd + 禁 SecurityLogAgent，两者缺一不可。
- *   3. 退一步说，backlog 超限时内核的设计行为是丢记录（audit_log_lost），
- *      不是阻塞关键路径；把消费者杀掉反而把"丢记录"变成"看门狗风险"。
- *
- * exec_br 还原是**单向门**：撤了之后任何 root exec 都会被 KNOX 检查块拒掉
- * （/system/bin/ls 也一样），只能重启恢复。所以：
- *   - 只想恢复强制 → 用用户态 `ktool enforce`（不碰 exec_br，不杀 auditd）；
- *   - 这个 restore 是"连 exec 检查一起还原"的彻底版，用前想清楚。
- */
-static void ktool_restore(void)
-{
-	void (*avc_reset)(u32);
-
-	avc_reset = (void *)kallsyms_lookup_name("avc_ss_reset");
-	if (avc_reset)
-		avc_reset(0);
-
-	kw32(PERM_MAP, 0);
-	kw32(PERM_MAP + 4, 0);
-
-	memcpy((void *)PERM_BASE, "/sbin/modprobe\0", 15);
-	wmb();
-
-	kw32(EXEC_BR, EXEC_BR_ORIG);
-
-	printk(KERN_INFO "ktool: restore done (avc reset, permissive off, "
-	       "modprobe_path restored, exec_br restored; auditd left alive)\n");
-}
 
 /*
  * ish — 把「当前进程」切成 uid 0 + u:r:init_shell:s0
@@ -1331,10 +1277,6 @@ static ssize_t ktool_write(struct file *file, const char __user *buf, size_t len
 			return -ENOMEM;
 		commit_creds(new);
 		printk(KERN_INFO "ktool: root current\n");
-	} else if (strncmp(kbuf, "restore", 7) == 0) {
-		if (!tgt)
-			return -EOPNOTSUPP;	/* 没有目标就绝不动地址 */
-		ktool_restore();
 	} else if (strncmp(kbuf, "wfind16 ", 8) == 0) {
 		int pid = 0;
 		unsigned int pat = 0;
@@ -1542,7 +1484,7 @@ static int __init ktool_init(void)
 		printk(KERN_INFO "ktool: target %s/%s build=%s\n", tgt->device,
 		       tgt->kernel, tgt->build ? tgt->build : "-");
 	else
-		printk(KERN_ERR "ktool: NO TARGET -> restore/patch/permissive 拒绝执行\n");
+		printk(KERN_ERR "ktool: NO TARGET -> patch/permissive 拒绝执行\n");
 	return 0;
 }
 
