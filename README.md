@@ -77,6 +77,22 @@ The first line uses the copy in `/data/local/tmp` on purpose: `/system/bin/ktool
 `0700 root:root`, and the `shell` domain cannot execute it. Once `su` is installed you can use
 `su -c "/system/bin/ktool target"` instead.
 
+### 4. Building
+
+```sh
+./scripts/build.sh                              # ktool
+TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su (static, bundled sqlite3)
+```
+
+Kernel module:
+
+```sh
+cd kmod
+make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
+```
+
+`KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
+
 ---
 
 ## Status
@@ -136,24 +152,6 @@ shell         -> shell_data   : sock_file { create write setattr unlink }
 ```
 
 Insertion details that matter: `policydb + 0x74` is `te_avtab` (htable / nslot / mask / nel), the key is four `u16` packed into 64 bits (`cls | tgt << 2 | src << 9`), nodes are 16 bytes, and **insertion must be ordered** — `avtab_search_node()` early-breaks on an ordered list, so an out-of-order insert is silently invisible.
-
----
-
-## Building
-
-```sh
-./scripts/build.sh                              # ktool
-TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su (static, bundled sqlite3)
-```
-
-Kernel module:
-
-```sh
-cd kmod
-make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
-```
-
-`KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
 
 ---
 

@@ -72,6 +72,22 @@ adb shell 'su -c id'                            # uid=0（需要 2 或 3 档）
 第一条用 `/data/local/tmp` 的副本是故意的：`/system/bin/ktool` 是 `0700 root:root`，`shell` 域
 执行不了。装好 `su` 之后也可以改用 `su -c "/system/bin/ktool target"`。
 
+### 4. 构建
+
+```sh
+./scripts/build.sh                              # ktool
+TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su（静态，内置 sqlite3）
+```
+
+内核模块：
+
+```sh
+cd kmod
+make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
+```
+
+`KDIR` 必须指向一份已配置好的 GT-I9500 内核树（含 `.config` 和 `Module.symvers`）。
+
 ---
 
 ## 现状
@@ -136,24 +152,6 @@ shell         -> shell_data   : sock_file { create write setattr unlink }
 插规则的细节很关键：`policydb + 0x74` 是 `te_avtab`（htable / nslot / mask / nel），key 是四个
 `u16` 拼成的 64 位（`cls | tgt << 2 | src << 9`），节点 16 字节，而且**必须有序插入** ——
 `avtab_search_node()` 在有序链表上会提前跳出，乱序插进去等于没插。
-
----
-
-## 构建
-
-```sh
-./scripts/build.sh                              # ktool
-TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su（静态，内置 sqlite3）
-```
-
-内核模块：
-
-```sh
-cd kmod
-make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
-```
-
-`KDIR` 必须指向一份已配置好的 GT-I9500 内核树（含 `.config` 和 `Module.symvers`）。
 
 ---
 
