@@ -1,0 +1,103 @@
+{
+ "types": {
+  "init_shell": 986,
+  "untrusted_app": 809,
+  "shell": 1178,
+  "app_data_file": 188,
+  "shell_data_file": 200,
+  "system_data_file": 849,
+  "su_exec": 161,
+  "null_device": 377,
+  "zygote": 124,
+  "init": 610,
+  "system_server": 10,
+  "platform_app": 52,
+  "system_app": 913,
+  "isolated_app": 1311
+ },
+ "classes": {
+  "fd": 8,
+  "process": 2,
+  "dir": 7,
+  "file": 6,
+  "sock_file": 12,
+  "unix_stream_socket": 23,
+  "binder": 82,
+  "capability": 4,
+  "service_manager": 85
+ },
+ "plan": [
+  {
+   "src": 986,
+   "tgt": 809,
+   "cls": 8,
+   "mask": 1,
+   "srcn": "init_shell",
+   "tgtn": "untrusted_app",
+   "clsn": "fd",
+   "perms": [
+    "use"
+   ]
+  },
+  {
+   "src": 809,
+   "tgt": 986,
+   "cls": 2,
+   "mask": 76,
+   "srcn": "untrusted_app",
+   "tgtn": "init_shell",
+   "clsn": "process",
+   "perms": [
+    "sigchld",
+    "sigkill",
+    "signal"
+   ]
+  },
+  {
+   "src": 809,
+   "tgt": 200,
+   "cls": 12,
+   "mask": 1054,
+   "srcn": "untrusted_app",
+   "tgtn": "shell_data_file",
+   "clsn": "sock_file",
+   "perms": [
+    "create",
+    "write",
+    "read",
+    "getattr",
+    "unlink"
+   ]
+  },
+  {
+   "src": 809,
+   "tgt": 200,
+   "cls": 7,
+   "mask": 1441796,
+   "srcn": "untrusted_app",
+   "tgtn": "shell_data_file",
+   "clsn": "dir",
+   "perms": [
+    "add_name",
+    "remove_name",
+    "search",
+    "write"
+   ]
+  },
+  {
+   "src": 986,
+   "tgt": 200,
+   "cls": 6,
+   "mask": 1048598,
+   "srcn": "init_shell",
+   "tgtn": "shell_data_file",
+   "clsn": "file",
+   "perms": [
+    "read",
+    "write",
+    "open",
+    "getattr"
+   ]
+  }
+ ]
+}

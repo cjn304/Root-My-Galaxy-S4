@@ -29,7 +29,20 @@ Installs both halves: `ktool` (the exploit plus the toolbox) and `su` (what apps
 to). It builds whatever is missing — so no toolchain is needed if prebuilt binaries are already in
 `src/` — then runs the two deploy steps in order. Both are idempotent.
 
-Only need command-line root, no app prompts? `./scripts/deploy_ktool.sh` alone is enough.
+It probes the device first and prints what it found: `clean`, `temp`, `persistent` or `mixed`
+(the last one means an install was interrupted halfway).
+
+For a one-session install that leaves nothing in `/system`:
+
+```sh
+./scripts/install.sh -temp
+```
+
+This writes only `/data/local/tmp/ktool_temp` — no boot hook, no module, no `su`. After a reboot
+there is no root left, and the file can be deleted at any time. Commands that need the module
+(`ish`, `ctx`, the avtab rules) are not available in this mode.
+
+Only need command-line root? `./scripts/deploy_ktool.sh` deploys ktool alone.
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 

@@ -28,7 +28,20 @@
 —— 如果 `src/` 里已经有预编译好的二进制，就不需要交叉工具链 —— 然后按顺序跑两步部署。两步都是
 幂等的，重复跑没问题。
 
-只要命令行 root、不需要应用弹窗？单跑 `./scripts/deploy_ktool.sh` 就够。
+它会先探测设备并打印当前状态：`clean`、`temp`、`persistent` 或 `mixed`（最后一种表示上次安装中途
+中断过）。
+
+如果只想要一次性的 root，不想在 `/system` 留任何东西：
+
+```sh
+./scripts/install.sh -temp
+```
+
+这种模式只往 `/data/local/tmp/ktool_temp` 写一个文件 —— 不装开机脚本、不加载模块、不装 `su`。
+重启后 root 就没了，那个文件也可以随时删。依赖模块的命令（`ish`、`ctx`、avtab 规则）在这个模式下
+不可用。
+
+只要命令行 root？`./scripts/deploy_ktool.sh` 单独部署 ktool。
 
 应用侧的 root 弹窗由 **phh's Superuser** 处理，授权前先装上它：
 
