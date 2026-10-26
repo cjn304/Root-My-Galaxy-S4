@@ -424,6 +424,8 @@ Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry tim
 |---|---|
 | `permissive [bit]` | Set a single `permissive_map` bit (defaults to `init_shell`) |
 | `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC. It only undoes the in-memory permissive window — it does not uninstall anything. `--noflush` does **not** actually restore enforcement |
+| `appwrite <src\|-> <dst>` | Write into another app's private data. The source is read as `init_shell` (any path), then the process is switched to the target directory's owner + `untrusted_app` in one step: the DAC key comes from a direct `cred->fsuid` write inside the module, the SELinux key from the domain switch. Works on `app_data_file` only — system apps are `system_app_data_file` and return 4 |
+| `apprm [-r] [-f] <path>...` | Same identity trick, for deleting. Nothing is printed after the switch — writing to the calling shell's pipe is itself a permission check that `untrusted_app` fails, and this kernel's audit path oopses on the denial, so success is only visible in the exit code |
 | `flush [-y]` | AVC flush only; `-y` skips the 3 s warning |
 | `patch` / `unpatch` | Apply / revert the KNOX `sys_execve` branch patch |
 | `setsid <sid\|init_shell> <cmd...>` | Rewrite the current `cred->security->sid`, then exec. Rescue path when the AVC cache is deadlocked |

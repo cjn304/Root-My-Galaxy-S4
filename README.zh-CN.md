@@ -159,7 +159,7 @@ shell         -> shell_data   : sock_file { create write setattr unlink }
 | CVE-2026-43499    | GhostLock，futex PI                    | 存在     | 受阻（缺读原语）          | 链的 A/B/C 三阶段在本机跑通过，但前提是用 CVE-2015-1805 的读能力构造出自洽的伪造节点 —— 自洽之后两道 `CONFIG_DEBUG_LIST` 检查才过得去。没有读原语就造不出自洽节点，链无法起步；而一旦有了读原语，GhostLock 又没有增量。 |
 | CVE-2016-3134     | netfilter，`xt_compat_match_from_user` | 存在     | 受阻（CAP_NET_ADMIN） | `memcpy(m->data, cm->data, msize - sizeof(*cm))` 之前没有 `msize` 下限检查。但整条 iptables 路径需要 `CAP_NET_ADMIN`。                                    |
 | CVE-2016-9793     | socket，`SO_SNDBUFFORCE`               | 存在     | 受阻（CAP_NET_ADMIN） | `sk_sndbuf` 没有上限检查。实测：`SO_SNDBUF` 会被 `min_t` 夹住，而 `SO_SNDBUFFORCE` 即使 uid 0 且 `CapEff=ffffffff` 也返回 EPERM。                               |
-| CVE-2016-5195     | dirtycow，`follow_page`                | 已修     | —                 | 三条件检查齐全（`FOLL_FORCE` | `FOLL_COW` 对 pte dirty）。金丝雀跑了约 57 万次写没反应。                                                                         |
+| CVE-2016-5195     | dirtycow，`follow_page`                | 已修     | —                 | 三条件检查齐全（`FOLL_FORCE` \| `FOLL_COW` 对 pte dirty）。金丝雀跑了约 57 万次写没反应。                                                                         |
 | CVE-2016-0728     | keyring                               | 已修     | —                 | `join_session_keyring` 末尾有 `key_put(keyring)`。                                                                                           |
 | CVE-2016-4470     | keyring                               | 已修     | —                 | `__key_link_end` 只在 `link_ret == 0` 时执行。                                                                                                 |
 | CVE-2016-8655     | AF_PACKET                             | 已修     | —                 | `packet_set_ring()` 里有 `if (unlikely(rb->pg_vec))` 守卫。                                                                                   |
@@ -408,6 +408,8 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 |---|---|
 | `permissive [bit]` | 置 `permissive_map` 的单个位（默认 `init_shell`） |
 | `enforce [--noflush]` | 清 `permissive_map` + 还原 `modprobe_path` + flush AVC。它只撤销内存里的 permissive 窗口 —— 不会卸载任何东西。`--noflush` 并**没有**真正恢复强制 |
+| `appwrite <src\|-> <dst>` | 写进别的 app 的私有数据。源文件以 `init_shell` 读（任意路径），然后一步切到「目标目录 owner + `untrusted_app`」：DAC 钥匙来自模块里直写 `cred->fsuid`，SELinux 钥匙来自换域。只对 `app_data_file` 有效 —— 系统应用是 `system_app_data_file`，会返回 4 |
+| `apprm [-r] [-f] <path>...` | 同一套身份，用于删除。切域之后不再输出任何东西 —— 往调用方的管道写本身就是一次权限检查，`untrusted_app` 过不了，而本内核的审计路径在拒绝时会 oops，所以成功与否只看退出码 |
 | `flush [-y]` | 只清 AVC 缓存；`-y` 跳过 3 秒警告 |
 | `patch` / `unpatch` | 打上 / 撤销 KNOX 的 `sys_execve` 分支补丁 |
 | `setsid <sid\|init_shell> <cmd...>` | 改写当前 `cred->security->sid` 然后 exec。AVC 缓存死锁时的救援通道 |
