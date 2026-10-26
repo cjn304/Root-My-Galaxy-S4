@@ -94,6 +94,43 @@ in this project came from a community repo and needed exactly that one-line edit
 `cred` sits at `+0x2EC` there but `+0x2FC` on the device. Every offset in `targets.h` was measured
 on hardware, not derived from source.
 
+#### What each build needs
+
+| Target | Inputs | Toolchain |
+|---|---|---|
+| `ktool` | `src/ktool.c`, `src/targets.h` | cross gcc, `-static`, no external libs |
+| `su` | `src/su_fork.c`, `src/sqlite3.c` + `.h` (bundled amalgamation) | same cross gcc, `-static`, `-lpthread` |
+| `ktool_mod.ko` | `kmod/ktool_mod.c` | same cross gcc + GNU make + a configured kernel tree |
+
+Versions this was built and tested with:
+
+| Tool | Version |
+|---|---|
+| Arm GNU Toolchain `arm-none-linux-gnueabihf-` | 13.3.Rel1 (gcc 13.3.1, 20240614) |
+| GNU Make | 4.4.1 (MSYS2 — Git Bash ships without make) |
+| adb | 1.0.41 |
+| bash | 5.x (Git Bash on Windows; the scripts assume `cygpath` exists) |
+
+The device side needs nothing extra: everything there is written against
+`/system/bin/sh` plus `grep` and `echo`. That is not caution, it is measured —
+this firmware has **no `sed`, no `awk`, no `printf`, no `tail`**, so any script
+that uses them silently does nothing (or half its job).
+
+#### Kernel sources
+
+Samsung's open source site no longer publishes packages for this generation, so
+pick any 3.4.5 GT-I9500 tree and treat its struct layouts as unverified:
+
+- what this repository was built against: https://github.com/somadsul/kernel_i9500
+- LineageOS's own tree: https://github.com/LineageOS/android_kernel_samsung_exynos5410
+- a community fork that merged Samsung's `I9500XXUHQD1` drop — the same build
+  generation as this device's `ZSSHQD1`, so closer, but still not proof:
+  https://github.com/exynos5410/android_kernel_samsung_exynos5410
+
+None of these is the tree the firmware itself was compiled from. The `cred`
+offset differs by 16 bytes between the first one and the device, which is the
+whole argument for measuring every offset instead of computing it.
+
 ---
 
 ## Status

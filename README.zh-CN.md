@@ -87,6 +87,40 @@ make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 本项目的源码树来自一个社区仓库，恰好就是这么改了一行：`cred` 在那边算出来是 `+0x2EC`，
 设备上实在 `+0x2FC`。所以 `targets.h` 里每个偏移都是在真机上量的，不是从源码推的。
 
+#### 三个产物各需要什么
+
+| 产物 | 输入 | 工具链 |
+|---|---|---|
+| `ktool` | `src/ktool.c`、`src/targets.h` | 交叉 gcc，`-static`，无外部库 |
+| `su` | `src/su_fork.c`、`src/sqlite3.c` + `.h`（自带的 amalgamation） | 同一个交叉 gcc，`-static`，`-lpthread` |
+| `ktool_mod.ko` | `kmod/ktool_mod.c` | 同一个交叉 gcc + GNU make + 一份配置好的内核树 |
+
+本仓库实际用到的版本：
+
+| 工具 | 版本 |
+|---|---|
+| Arm GNU Toolchain `arm-none-linux-gnueabihf-` | 13.3.Rel1（gcc 13.3.1，20240614） |
+| GNU Make | 4.4.1（MSYS2 —— Git Bash 本身不带 make） |
+| adb | 1.0.41 |
+| bash | 5.x（Windows 上的 Git Bash；脚本假设有 `cygpath`） |
+
+设备侧不需要额外工具：所有脚本只依赖 `/system/bin/sh` 加 `grep`、`echo`。这不是保守，是实测 ——
+这个固件**没有 `sed`、没有 `awk`、没有 `printf`、没有 `tail`**，用了它们的脚本会静默地什么都不做
+（或者只做一半）。
+
+#### 内核源码
+
+三星的开源发布站已经不再提供这一代的包，所以任选一份 3.4.5 的 GT-I9500 树，并把它的结构体布局
+当作未经证实：
+
+- 本仓库编译时用的：https://github.com/somadsul/kernel_i9500
+- LineageOS 的树：https://github.com/LineageOS/android_kernel_samsung_exynos5410
+- 一个并入了三星 `I9500XXUHQD1` 的社区 fork —— 与本机的 `ZSSHQD1` 同代，更接近，但仍不等于证明：
+  https://github.com/exynos5410/android_kernel_samsung_exynos5410
+
+这几份都不是固件本身编译时用的那棵树。第一份和设备之间 `cred` 偏移差 16 字节，这正是
+「每个偏移都要量、不要算」的全部理由。
+
 ---
 
 ## 现状
