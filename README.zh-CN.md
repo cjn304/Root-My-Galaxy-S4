@@ -53,8 +53,9 @@
 `/data/local/tmp/init.sec.boot.sh.orig` 备份就用它，否则删掉标记块再做语法检查），然后删掉
 `/system` 上的文件、清空 `/data`。
 
-`sys_execve` 补丁是**故意不撤**的。撤了之后 KNOX 分支回来，连 `/system/bin/rm` 都执行不了 ——
-卸载过程中所有删除都会失败。它只存在于内存，重启即清，而那时文件早就删完了。
+`sys_execve` 补丁放在**最后一步**撤。它之前的所有操作都需要以 root 身份成功 exec —— remount、
+`cp`、`rm`、`sh -n` —— 先撤补丁会让 KNOX 分支回来，这些操作全部失败。撤掉之后只有 `adb shell`
+（uid 2000）还能 exec，这刚好够最后清理 `/data` 用。
 
 应用侧的 root 弹窗由 **phh's Superuser** 处理，授权前先装上它：
 

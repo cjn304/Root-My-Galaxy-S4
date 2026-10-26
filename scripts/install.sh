@@ -177,11 +177,11 @@ uninstall() {
 	fi
 	echo "   driving with $KT"
 
-	echo "== [1/4] revoke avtab rules, close the permissive window =="
+	echo "== [1/5] revoke avtab rules, close the permissive window =="
 	adb shell "$KT pwn /system/bin/sh -c 'echo avrestore > /dev/ktool; echo avcflush > /dev/ktool'" 2>&1 |
 		grep -E "avrestore done|avc cache flushed" || echo "   (module not loaded; avtab rules die with the reboot anyway)"
 
-	echo "== [2/4] restore the boot script =="
+	echo "== [2/5] restore the boot script =="
 	adb shell "$KT root /system/bin/sh -c '
 		mount -o rw,remount /system || exit 10
 		if [ -f /data/local/tmp/init.sec.boot.sh.orig ]; then
@@ -202,21 +202,33 @@ uninstall() {
 		mount -o ro,remount /system
 	'"
 
-	echo "== [3/4] delete the /system files =="
+	echo "== [3/5] delete the /system files and su_allow =="
 	adb shell "$KT root /system/bin/sh -c '
 		mount -o rw,remount /system
 		rm -f /system/xbin/su /system/lib/modules/ktool_mod.ko /system/bin/ktool
+		rm -f /data/system/su_allow
 		mount -o ro,remount /system
 		ls /system/bin/ktool 2>/dev/null && echo LEFTOVER || echo removed
 	'"
 
-	echo "== [4/4] wipe /data leftovers =="
-	adb shell "$KT root /system/bin/sh -c 'rm -rf /data/local/tmp/* ; rm -f /data/system/su_allow'"
+	echo "== [4/5] drop the exec patch (last action needing root) =="
+	# Everything above needs a working exec as root: remount, cp, rm, sh -n.
+	# This is the last one that does. After it the KNOX branch is back and any
+	# root exec is refused — but adb shell is uid 2000, so plain shell commands
+	# still work, which is what step 5 needs.
+	adb shell "$KT unpatch" 2>&1 | grep -v '^$' || \
+		echo "   unpatch failed (harmless: the reboot clears it either way)"
+
+	echo "== [5/5] wipe /data leftovers =="
+	# shell owns these; no root needed, which is why this can run after unpatch.
+	adb shell 'rm -rf /data/local/tmp/ktool_new /data/local/tmp/ktool_temp \
+		/data/local/tmp/ktool /data/local/tmp/sud /data/local/tmp/su_new \
+		/data/local/tmp/su_prev.bak /data/local/tmp/su_access_mode'
 
 	echo
-	echo "uninstalled. What remains is only the in-memory exec patch and the"
-	echo "loaded module — both disappear on reboot, and neither survives without"
-	echo "the files that are now gone."
+	echo "uninstalled. The module is still loaded and the policy still holds the"
+	echo "stale AVC entries flushed in step 1, but nothing on disk can rebuild"
+	echo "either of them: the boot hook is gone, and so are ktool and su."
 	echo
 	echo "   reboot to finish:  adb reboot"
 	echo "   app prompt binary: uninstall phh's Superuser from Settings if you"

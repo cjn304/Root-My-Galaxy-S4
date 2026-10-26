@@ -54,9 +54,10 @@ It revokes the 8 avtab rules, flushes AVC, restores the stock boot script (from
 `/data/local/tmp/init.sec.boot.sh.orig` if that backup exists, otherwise by deleting the marked
 block and syntax-checking the result), then deletes the `/system` files and wipes `/data`.
 
-The `sys_execve` patch is deliberately left in place. Undoing it puts the KNOX branch back, and
-then even `/system/bin/rm` refuses to execute — every deletion in the uninstall would fail. It
-lives in memory only; the reboot clears it, by which time the files are already gone.
+The `sys_execve` patch is dropped **last**, on purpose. Everything before it needs a working exec
+as root — remount, `cp`, `rm`, `sh -n` — so undoing the patch first would put the KNOX branch back
+and make every one of those fail. Once it is dropped, only `adb shell` (uid 2000) can still exec,
+which is exactly enough for the final `/data` cleanup.
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 
