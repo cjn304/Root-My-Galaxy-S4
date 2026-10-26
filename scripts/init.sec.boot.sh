@@ -1,6 +1,18 @@
 #!/system/bin/sh
-# SPDX-License-Identifier: GPL-3.0-or-later
-
+#
+# 这份文件是**追加**到设备 /system/etc/init.sec.boot.sh 末尾的标记块，
+# 不是完整脚本，运行 install.sh 也不会覆盖原文件。
+#
+# 从 shebang 到下面的 begin 标记之间是 GT-I9500 原版 init.sec.boot.sh
+# 的内容，只作对照：说明块插在哪、它之前是什么。这几行在不同固件之间
+# 不一样，所以 install.sh 只截取两个标记之间的内容追加到设备现有文件
+# 之后，不覆盖原文件。
+#
+# 注意：这段注释里不能出现标记行的原文 —— install.sh 是用那两行原文做
+# sed 匹配的，注释里写一遍会让提取范围从注释就开始。
+#
+# 标记块本身是 GPL-3.0-or-later（同仓库根 LICENSE）；上面那几行原版内容
+# 是三星的代码，不适用。
 
 echo "init.sec.boot.sh: start" > /dev/kmsg
 
@@ -25,6 +37,9 @@ cat /proc/deferred_initcalls
   echo "attr: $(cat /proc/self/attr/current)"
 
   # 1) lkmauth_bootmode = 2（BSS，每次开机归零）
+  #    这个地址和 src/targets.h 里的 lkmauth_bootmode 是同一个值，换机型
+  #    两边都要改。ktool w32 是原始写，不走 target 表，写错地址等于在内核
+  #    BSS 里随机位置写 —— 所以移植时先改 targets.h，再同步改这一行。
   /system/bin/ktool w32 c0c0ae28 2
   echo "bootmode_rc=$?"
 
@@ -131,4 +146,4 @@ cat /proc/deferred_initcalls
 
   echo "=== 2a v9g end ==="
 } > /data/system/2a_v9g.log 2>&1
-# ---- 2a auto end (v9d) ----
+# ---- 2a auto end (v9g) ----

@@ -100,7 +100,7 @@ install_persistent() {
 	fi
 	# Only the marked block, not the whole file: the lines before it are the
 	# device's own stock script and differ between firmware builds.
-	HOOK="$HERE/init.sec.boot.v9g.sh"
+	HOOK="$HERE/init.sec.boot.sh"
 	if [ -f "$HOOK" ]; then
 		sed -n '/2a auto begin/,/2a auto end/p' "$HOOK" > /tmp/ktool_hook.$$
 		if [ -s /tmp/ktool_hook.$$ ]; then
@@ -114,7 +114,7 @@ install_persistent() {
 		fi
 		rm -f /tmp/ktool_hook.$$
 	else
-		echo "   scripts/init.sec.boot.v9g.sh missing — persistence will be skipped"
+		echo "   scripts/init.sec.boot.sh missing — persistence will be skipped"
 	fi
 	"$HERE/deploy_ktool.sh"
 	adb shell rm -f /data/local/tmp/ktool_mod.ko /data/local/tmp/boot_hook.sh 2>/dev/null || true
@@ -273,9 +273,13 @@ uninstall() {
 			cp /data/local/tmp/init.sec.boot.sh.orig /system/etc/init.sec.boot.sh
 			echo used .orig backup
 		else
-			sed -i \"/2a auto begin/,/2a auto end/d\" /system/etc/init.sec.boot.sh
-			sed -i \"/SPDX-License-Identifier: GPL-3.0-or-later/d\" /system/etc/init.sec.boot.sh
-			echo stripped the marked block
+			# This branch used to strip the block with sed. There is no sed on this
+			# firmware ("sed: not found"), so it silently did nothing. A read loop
+			# would work but has to live inside this doubly-quoted su -c string,
+			# where every $ gets expanded by the PC shell — too easy to corrupt.
+			# install.sh always writes the .orig backup, so a missing one means
+			# the hook was deployed by hand; leaving it alone is the honest move.
+			echo NO_ORIG_BACKUP_boot_script_left_untouched
 		fi
 		if sh -n /system/etc/init.sec.boot.sh 2>/dev/null; then
 			echo syntax-ok

@@ -65,23 +65,56 @@ echo "== 3b. boot hook =="
 # Only the marked block is appended. The lines before it are the device's own
 # stock script and are not the same across firmware builds, so replacing the
 # whole file would silently drop whatever Samsung put there.
+#
+# No sed ("sed: not found"), no awk, and no printf either — only grep and echo.
+# The
+# block is stripped with a read loop instead. A first attempt with `sed -i`
+# failed silently and left two blocks stacked on the device, which is why this
+# does not go near sed.
 BOOT=/system/etc/init.sec.boot.sh
 BOOTBAK=/data/local/tmp/init.sec.boot.sh.orig
+BOOTTMP=/data/local/tmp/boot.new
 if [ -f /data/local/tmp/boot_hook.sh ]; then
 	if grep -q "2a auto begin" "$BOOT" 2>/dev/null; then
-		echo "boot hook: already present, left alone"
-	else
-		# First clean copy becomes the restore point install.sh -u copies back.
-		[ -f "$BOOTBAK" ] || cp "$BOOT" "$BOOTBAK"
-		# The stock file need not end with a newline.
-		printf '\n' >> "$BOOT"
-		cat /data/local/tmp/boot_hook.sh >> "$BOOT"
-		if sh -n "$BOOT" 2>/dev/null; then
-			echo "boot hook: installed, syntax ok"
+		# Replace, do not skip: an install should bring the hook up to date
+		# rather than leave whatever block was deployed months ago. Strip every
+		# old block first, so the backup below still captures the stock file.
+		# Blank lines are held back one at a time and only emitted when
+		# something non-blank follows. Without that, every reinstall would leave
+		# one more trailing blank line behind and the file would grow by a line
+		# each time.
+		_bp=0
+		_pend=0
+		: > "$BOOTTMP"
+		while IFS= read -r _bl || [ -n "$_bl" ]; do
+			case "$_bl" in *"2a auto begin"*) _bp=1 ;; esac
+			if [ "$_bp" = 0 ]; then
+				if [ -z "$_bl" ]; then
+					_pend=1
+				else
+					if [ "$_pend" = 1 ]; then echo >> "$BOOTTMP"; fi
+					_pend=0
+					echo "$_bl" >> "$BOOTTMP"
+				fi
+			fi
+			case "$_bl" in *"2a auto end"*) _bp=0 ;; esac
+		done < "$BOOT"
+		if cat "$BOOTTMP" > "$BOOT"; then
+			echo "boot hook: replaced the previous block"
 		else
-			cp "$BOOTBAK" "$BOOT"
-			echo "boot hook: SYNTAX FAIL after append — reverted"
+			echo "boot hook: strip FAILED, left untouched"
 		fi
+	fi
+	# First clean copy becomes the restore point install.sh -u copies back.
+	[ -f "$BOOTBAK" ] || cp "$BOOT" "$BOOTBAK"
+	# The stock file need not end with a newline.
+	echo >> "$BOOT"
+	cat /data/local/tmp/boot_hook.sh >> "$BOOT"
+	if sh -n "$BOOT" 2>/dev/null; then
+		echo "boot hook: installed, syntax ok"
+	else
+		cp "$BOOTBAK" "$BOOT"
+		echo "boot hook: SYNTAX FAIL after append — reverted"
 	fi
 else
 	echo "boot hook: not provided"
