@@ -168,6 +168,11 @@ install_persistent() {
 			mount -o ro,remount /system
 			echo deployed
 		'" | grep -E "deployed|denied|fail" || echo "   su deploy FAILED"
+		# pwn above opened the permissive window, so close it here. The original
+		# deploy_su.sh ended with exactly this line; dropping it when the script
+		# was inlined left init_shell permissive after every install, and root
+		# could write any app's private data until the next reboot.
+		adb shell '/data/local/tmp/ktool_new enforce' 2>&1 | grep -v '^$' || true
 	fi
 
 	echo "== [5/6] activate now =="
