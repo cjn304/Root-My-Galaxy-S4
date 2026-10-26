@@ -43,6 +43,19 @@
 
 只要命令行 root？`./scripts/deploy_ktool.sh` 单独部署 ktool。
 
+要把持久化安装撤掉：
+
+```sh
+./scripts/install.sh -u
+```
+
+它会撤回 8 条 avtab 规则、清 AVC 缓存、恢复原版开机脚本（有
+`/data/local/tmp/init.sec.boot.sh.orig` 备份就用它，否则删掉标记块再做语法检查），然后删掉
+`/system` 上的文件、清空 `/data`。
+
+`sys_execve` 补丁是**故意不撤**的。撤了之后 KNOX 分支回来，连 `/system/bin/rm` 都执行不了 ——
+卸载过程中所有删除都会失败。它只存在于内存，重启即清，而那时文件早就删完了。
+
 应用侧的 root 弹窗由 **phh's Superuser** 处理，授权前先装上它：
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/

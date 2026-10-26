@@ -44,6 +44,20 @@ there is no root left, and the file can be deleted at any time. Commands that ne
 
 Only need command-line root? `./scripts/deploy_ktool.sh` deploys ktool alone.
 
+To undo a persistent install:
+
+```sh
+./scripts/install.sh -u
+```
+
+It revokes the 8 avtab rules, flushes AVC, restores the stock boot script (from
+`/data/local/tmp/init.sec.boot.sh.orig` if that backup exists, otherwise by deleting the marked
+block and syntax-checking the result), then deletes the `/system` files and wipes `/data`.
+
+The `sys_execve` patch is deliberately left in place. Undoing it puts the KNOX branch back, and
+then even `/system/bin/rm` refuses to execute — every deletion in the uninstall would fail. It
+lives in memory only; the reboot clears it, by which time the files are already gone.
+
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
