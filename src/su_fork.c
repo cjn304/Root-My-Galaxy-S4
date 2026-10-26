@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 /*
- * su.c — GT-I9500 su（ktool + phh Superuser APK 授权，fork 版）
+ * su_fork.c — GT-I9500 su（ktool + phh Superuser APK 授权，fork 版）
  *
  * 与 su_apk.c 的区别：socket 由「保持 app 域的子进程」持有，
  * 这样即使父进程提权到 init_shell，APK 也能连上 socket。
