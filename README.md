@@ -37,9 +37,8 @@ It probes the device first and prints what it found: `clean`, `temp`, `persisten
 (an install that was interrupted halfway). Command-line root only, no `su`:
 `./scripts/deploy_ktool.sh`.
 
-Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
-
-https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
+Root prompts on the app side are handled by
+[phh's Superuser 1.0.3.3](https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/) — install it before granting root.
 
 Source: [phhusson/Superuser](https://github.com/phhusson/Superuser)
 

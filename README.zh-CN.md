@@ -35,9 +35,7 @@
 运行前会探测并打印状态：`clean`、`temp`、`persistent`、`mixed`（装了一半）。只想要命令行 root，  
 不需要 `su`：`./scripts/deploy_ktool.sh`。
 
-应用侧弹窗由 **phh's Superuser** 处理，授权前先装：
-
-<https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/>
+应用侧弹窗由 [phh's Superuser 1.0.3.3](https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/) 处理，授权前先装（versionCode 1033）。
 
 源码：[phhusson/Superuser](https://github.com/phhusson/Superuser)
 
