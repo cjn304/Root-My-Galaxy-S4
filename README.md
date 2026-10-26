@@ -106,7 +106,7 @@ sepf  : SEPF_GT-I9500_5.0.1-1_0039
 5. Authorization     /system/xbin/su (fork-based, phh protocol) + Superuser APK
 ```
 
-**`kwrite` lies about its length.** Every call returns 0 regardless of outcome. Landing rate over 5 independent tries: 8 B → 5/5, 16 B → 1/5, 32 B → 0/5, 48 B → 0/5, 72 B → 1/5. Hence fixed 8-byte chunks with read-back verification and an undo log. Measured on this device, a single 8-byte read costs 0.9 ms with 2.9 retries on average; a write costs a write plus a read-back, so moving a megabyte takes minutes, not seconds.
+**`kwrite` lies about its length.** Every call returns 0 regardless of outcome. Landing rate over 5 independent tries: 8 B → 5/5, 16 B → 1/5, 32 B → 0/5, 48 B → 0/5, 72 B → 1/5. Hence fixed 8-byte chunks with read-back verification and an undo log. It is slow — a megabyte takes minutes — which is why `kread_file` exists for pulling bulk data and writes stay small.
 
 ### The 8 avtab rules
 
