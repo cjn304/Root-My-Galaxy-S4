@@ -79,7 +79,7 @@ install_persistent() {
 	if [ -f "$SRC/ktool" ]; then
 		echo "src/ktool present, skipping build"
 	else
-		"$HERE/build.sh"
+		"$HERE/build_ktool.sh"
 	fi
 
 	echo "== [2/6] deploy ktool (+ module file + boot hook) =="
@@ -207,7 +207,7 @@ install_temp() {
 	if [ -f "$SRC/ktool" ]; then
 		echo "src/ktool present, skipping build"
 	else
-		"$HERE/build.sh"
+		"$HERE/build_ktool.sh"
 	fi
 
 	echo "== [2/3] push to /data/local/tmp =="

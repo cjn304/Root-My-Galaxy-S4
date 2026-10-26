@@ -10,7 +10,7 @@
 #   push -> chmod -> ktool pwn (uid0 + permissive) -> flush -> remount rw
 #   -> replace -> chown/chmod/chcon -> remount ro -> self test -> restore
 #
-# It does NOT build. Run ./build.sh first.
+# It does NOT build. Run ./build_ktool.sh first.
 set -e
 
 # Git Bash on Windows rewrites /data/... into C:/...; disable it.
@@ -20,7 +20,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 BIN="${1:-$HERE/../src/ktool}"
 DEV="$HERE/device_ktool.sh"
 
-[ -f "$BIN" ] || { echo "找不到 $BIN（先跑 ./build.sh）"; exit 1; }
+[ -f "$BIN" ] || { echo "找不到 $BIN（先跑 ./build_ktool.sh）"; exit 1; }
 [ -f "$DEV" ] || { echo "找不到 $DEV"; exit 1; }
 
 # adb.exe is a native Windows binary: it cannot read MSYS paths like /d/foo.

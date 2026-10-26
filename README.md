@@ -73,7 +73,7 @@ The first line uses the copy in `/data/local/tmp` on purpose: `/system/bin/ktool
 ### 4. Building
 
 ```sh
-./scripts/build.sh                              # ktool
+./scripts/build_ktool.sh                              # ktool
 TOOLCHAIN=/opt/arm/bin ./scripts/build_su.sh    # su (static, bundled sqlite3)
 ```
 

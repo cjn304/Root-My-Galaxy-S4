@@ -10,11 +10,11 @@
 # 两者都是纯静态 ELF，Android 侧不经过 linker，直接 exec。
 #
 # 工具链选择（按优先级）：
-#   TOOLCHAIN=/opt/arm/bin ./build.sh            指定工具链目录
-#   CROSS_COMPILE=arm-linux-gnueabi- ./build.sh  指定前缀
-#   ./build.sh                                   用 PATH 里的 arm-none-linux-gnueabihf-gcc
+#   TOOLCHAIN=/opt/arm/bin ./build_ktool.sh            指定工具链目录
+#   CROSS_COMPILE=arm-linux-gnueabi- ./build_ktool.sh  指定前缀
+#   ./build_ktool.sh                                   用 PATH 里的 arm-none-linux-gnueabihf-gcc
 #
-# 用法：./build.sh [输出名]   默认 ktool（输出到 ../src/）
+# 用法：./build_ktool.sh [输出名]   默认 ktool（输出到 ../src/）
 set -e
 
 if [ -n "$TOOLCHAIN" ]; then
