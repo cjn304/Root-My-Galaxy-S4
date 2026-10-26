@@ -11,6 +11,8 @@
 # 注意：这段注释里不能出现标记行的原文 —— install.sh 是用那两行原文做
 # sed 匹配的，注释里写一遍会让提取范围从注释就开始。
 #
+# 块内容：机型表校验 → 标签断言 → exec 补丁 → 门禁 → permissive 收口。
+#
 # 标记块本身是 GPL-3.0-or-later（同仓库根 LICENSE）；上面那几行原版内容
 # 是三星的代码，不适用。
 
@@ -29,9 +31,10 @@ cat /proc/deferred_initcalls
 #pid=${str:10:4}
 #echo "init.sec.boot.sh: strace -tt -T -o /data/log/strace.txt -p ${pid}" > /dev/kmsg
 #strace -tt -T -o /data/log/strace.txt -p ${pid}
-# ---- 2a auto begin (v9g: target table + label assert + minimal + exec patch + gate + permissive 收口) ----
+
+# ---- 2a auto begin ----
 {
-  echo "=== 2a v9g start ==="
+  echo "=== 2a start ==="
   date
   echo "id: $(id)"
   echo "attr: $(cat /proc/self/attr/current)"
@@ -144,6 +147,6 @@ cat /proc/deferred_initcalls
   echo "--- su self test ---"
   /system/xbin/su -c 'id; cat /proc/self/attr/current' 2>&1
 
-  echo "=== 2a v9g end ==="
-} > /data/system/2a_v9g.log 2>&1
-# ---- 2a auto end (v9g) ----
+  echo "=== 2a end ==="
+} > /data/system/2a.log 2>&1
+# ---- 2a auto end ----
