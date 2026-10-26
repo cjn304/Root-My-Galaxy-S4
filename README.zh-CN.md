@@ -116,14 +116,6 @@ make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 |---|---|---|
 | [somadsul/kernel_i9500](https://github.com/somadsul/kernel_i9500) | 3.4.5 | 本仓库编译时用的；`EXTRAVERSION` 被改成 `-6264821` 才装得进去 |
 | [LineageOS/android_kernel_samsung_exynos5410](https://github.com/LineageOS/android_kernel_samsung_exynos5410)（`cm-11.0-old`） | 3.4.5 | 基础版本与上面一致，可以顶替 |
-| [exynos5410/android_kernel_samsung_exynos5410](https://github.com/exynos5410/android_kernel_samsung_exynos5410)（`cm-14.1`） | **3.4.67** | 只能当参考 —— 领先 62 个 stable 版本，vermagic 对不上，布局也动了不少 |
-
-第三份有一条叫 `i9500: merge Samsung Kernel Source I9500XXUHQD1` 的提交。名字听着像整包，
-实际只有 **13 个文件、166 行** —— 2017 年 4 月那批安全补丁（binder `%p` 改 `%pK`、udp 校验和、
-sctp chunk 长度、`task_tgid_nr_ns` 等）。它真正透露的是三星怎么编这个东西：新增的
-`build_kernel.sh` 用的是 `arm-eabi-4.8` 加 `ja3g_00_defconfig`，而本机 `/proc/version` 里正是
-`gcc version 4.8`；`ja3g` 又恰好是本机的 `ro.product.device`。可以拿来交叉验证，
-但它仍不是固件编译时用的那棵树。
 
 这几份都不是固件本身编译时用的那棵树。第一份和设备之间 `cred` 偏移差 16 字节，这正是
 「每个偏移都要量、不要算」的全部理由。
