@@ -324,7 +324,7 @@ python3 tools/sepolicy_parse.py sepolicy .
 2. `ktool backend probe` —— 必须打印 `probe(init_task=...): OK`
 3. `ktool dump <init_task> 64` —— 应该能解出像样的 `task_struct`
 4. `ktool sym init_task` —— 必须与表里一致
-5. 只有在真机上把整条链（root → mount → 模块 → restore → Enforcing）走通之后，才把
+5. 只有在真机上把整条链（root → mount → 模块 → enforce → Enforcing）走通之后，才把
    `verified` 改成 1，并把测过什么写进 `note`
 
 任何一条对不上，**就不要往下走** —— 在内核 `.data` 里猜地址，是把手机变砖的标准姿势。
@@ -405,7 +405,7 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 | 命令 | 说明 |
 |---|---|
 | `permissive [bit]` | 置 `permissive_map` 的单个位（默认 `init_shell`） |
-| `enforce [--noflush]` | 清 `permissive_map` + 还原 `modprobe_path` + flush AVC（别名 `unperm`、`restore`）。它只撤销内存里的 permissive 窗口 —— 不会卸载任何东西。`--noflush` 并**没有**真正恢复强制 |
+| `enforce [--noflush]` | 清 `permissive_map` + 还原 `modprobe_path` + flush AVC。它只撤销内存里的 permissive 窗口 —— 不会卸载任何东西。`--noflush` 并**没有**真正恢复强制 |
 | `flush [-y]` | 只清 AVC 缓存；`-y` 跳过 3 秒警告 |
 | `patch` / `unpatch` | 打上 / 撤销 KNOX 的 `sys_execve` 分支补丁 |
 | `setsid <sid\|init_shell> <cmd...>` | 改写当前 `cred->security->sid` 然后 exec。AVC 缓存死锁时的救援通道 |

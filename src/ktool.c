@@ -379,7 +379,7 @@ static int kwrite(unsigned long addr, const void *data, int len)
  * 写 + 读回校验。
  *
  * 注意 b[] 的大小：调用方最大传 256（modprobe_path 那段），
- * 原来这里是 64 —— 读回 256 字节直接踩栈，表现为 enforce/restore 时
+ * 原来这里是 64 —— 读回 256 字节直接踩栈，表现为 enforce 时
  * 随机段错误（P4.88 抓到）。上限与调用方对齐，别改大不改小。
  */
 static int kwrite_verify(unsigned long addr, const void *data, int len)
@@ -3332,7 +3332,7 @@ static int ktool_dispatch(int argc, char **argv)
 			show_caps("    ");
 			pair[0] = save[k];
 			if (kwrite_verify(c2 + offs[k], pair, 8) != 0)
-				printf("  restore fail\n");
+				printf("  restore cred fail\n");
 		}
 		show_caps("after");
 		return 0;
@@ -3349,11 +3349,11 @@ static int ktool_dispatch(int argc, char **argv)
 	}
 
 
-	if (!strcmp(argv[1], "enforce") || !strcmp(argv[1], "unperm") ||
-	    !strcmp(argv[1], "restore")) {
+	if (!strcmp(argv[1], "enforce")) {
 		/*
-		 * enforce（P4.88 起的主名；unperm / restore 保留为别名——
-		 * init.sec.boot.v9{e,f,g}.sh 里有 3 处 /system/bin/ktool restore）
+		 * enforce —— 唯一名字。unperm / restore 是 P4.88 之前的旧名，
+		 * 已删除。restore 尤其容易误导：它听起来像"还原系统"，实际只清
+		 * permissive_map 和 AVC 缓存，不撤 exec 补丁、不卸模块、不删文件。
 		 *
 		 *   ktool enforce           关 permissive + 清 AVC 缓存
 		 *   ktool enforce --noflush 只关 permissive（诊断开关）
@@ -3595,7 +3595,7 @@ static void kt_repl_help(void)
 	"  bench [addr] [n] | selftest     读吞吐 / 读自检\n"
 	"  wtest [len] [off]               写原语落地诊断\n"
 	"  promote | unroot                提权但留在会话 / 用快照还原 cred\n"
-	"  enforce [--noflush]             关 permissive + 清 AVC（别名 unperm / restore）\n"
+	"  enforce [--noflush]             关 permissive + 清 AVC（不撤补丁、不卸模块）\n"
 	"                                  --noflush = 未真正恢复，仅诊断用\n"
 	"  flush [-y]                      只清 AVC 缓存（-y 跳过等待）\n"
 	"  patch | unpatch                 KNOX exec 检查块；撤了只是失去特权，可再 patch\n"

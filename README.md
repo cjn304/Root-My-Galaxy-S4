@@ -337,7 +337,7 @@ python3 tools/sepolicy_parse.py sepolicy .
 2. `ktool backend probe` — must print `probe(init_task=...): OK`
 3. `ktool dump <init_task> 64` — should decode as a plausible `task_struct`
 4. `ktool sym init_task` — must agree with the table
-5. Only after the full chain (root → mount → module → restore → Enforcing) is confirmed on
+5. Only after the full chain (root → mount → module → enforce → Enforcing) is confirmed on
    hardware, flip `verified = 1` and write what you tested into `note`
 
 If any of these disagree, **do not proceed** — guessing addresses in kernel `.data` is how you
@@ -420,7 +420,7 @@ Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry tim
 | Command | Description |
 |---|---|
 | `permissive [bit]` | Set a single `permissive_map` bit (defaults to `init_shell`) |
-| `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC (aliases `unperm`, `restore`). It only undoes the in-memory permissive window — it does not uninstall anything. `--noflush` does **not** actually restore enforcement |
+| `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC. It only undoes the in-memory permissive window — it does not uninstall anything. `--noflush` does **not** actually restore enforcement |
 | `flush [-y]` | AVC flush only; `-y` skips the 3 s warning |
 | `patch` / `unpatch` | Apply / revert the KNOX `sys_execve` branch patch |
 | `setsid <sid\|init_shell> <cmd...>` | Rewrite the current `cred->security->sid`, then exec. Rescue path when the AVC cache is deadlocked |

@@ -96,13 +96,13 @@ cat /proc/deferred_initcalls
   #     实测 permissive 全关状态下：su 弹窗路径 0 拒绝、appwrite 正常、
   #     ktool 门禁正常、root exec 不受影响（exec patch 保留）。
   if [ -c /dev/ktool ]; then
-    /system/bin/ktool restore
-    restore_rc=$?
-    echo "restore_rc=$restore_rc"
-    if [ "$restore_rc" != "0" ]; then
+    /system/bin/ktool enforce
+    enforce_rc=$?
+    echo "enforce_rc=$enforce_rc"
+    if [ "$enforce_rc" != "0" ]; then
       # 4 = avcflush 不可用：permissive_map 已清但缓存未清，
       # 看起来是 Enforcing，实际旧的三元组仍按 permissive 放行。
-      echo "KT_ENFORCE_FAIL rc=$restore_rc" > /dev/kmsg
+      echo "KT_ENFORCE_FAIL rc=$enforce_rc" > /dev/kmsg
     fi
   else
     # 模块没起来就别假装收口成功：permissive 还开着。
