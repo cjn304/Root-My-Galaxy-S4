@@ -464,8 +464,11 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 ## 致谢
 
 - CVE-2015-1805 —— `pipe_read()` / `pipe_write()` 的 iovec 越界（iovyroot 的利用思路）
+- **KNOXout**（Lev Aronsky，Viral Security Group）—— 三星 TIMA 与 RKP 究竟拦什么。
+  「永远不写 `selinuxfs`」这条规则就来自这里，之后才在设备上得到确认
 - phh's Superuser —— su 协议与 APK 侧
-- SELinux 内核实现：`security/selinux/ss/{avtab,policydb,services}.c`、`avc.c`
+- Linux 内核 SELinux 子系统（NSA；Stephen Smalley 及贡献者）—— 本项目在运行时直接改写的
+  `security/selinux/` 内部结构（`avtab`、`policydb`、`avc`）
 
 本仓库的代码和文字有相当一部分是在 AI 协助下完成的。但每一个地址、偏移、权限掩码和 `verified`
 声明都在真机上核对过：实验、失败分析和"保留什么"的判断是人做的。

@@ -475,8 +475,11 @@ computed from scratch.
 ## Credits
 
 - CVE-2015-1805 — `pipe_read()` / `pipe_write()` iovec OOB (iovyroot exploitation approach)
+- **KNOXout** (Lev Aronsky, Viral Security Group) — what Samsung's TIMA and RKP actually intercept.
+  This is where the "never write `selinuxfs`" rule came from, before it was confirmed on device
 - phh's Superuser — su protocol and APK side
-- SELinux in-kernel implementation: `security/selinux/ss/{avtab,policydb,services}.c`, `avc.c`
+- Linux kernel SELinux subsystem (NSA; Stephen Smalley and contributors) — the `security/selinux/`
+  internals (`avtab`, `policydb`, `avc`) that this project edits in memory at runtime
 
 Substantial parts of the code and prose here were written with AI assistance. Every address,
 offset, permission mask and `verified` claim was checked against a real device: the experiments,
