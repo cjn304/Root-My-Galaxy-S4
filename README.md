@@ -16,7 +16,7 @@ check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
 ### 1. Prerequisites
 
 - Samsung Galaxy S4 **GT-I9500** on `LRX22C.I9500ZSSHQD1` / kernel `3.4.5-6264821`
-  (other builds: see [Porting](#porting-to-another-device))
+  (other devices and builds: see [Porting](#porting-to-another-device))
 - `adb` on your PC, device connected over USB
 
 ### 2. Install and uninstall
@@ -36,13 +36,6 @@ check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
 It probes the device first and prints what it found: `clean`, `temp`, `persistent` or `mixed`
 (an install that was interrupted halfway). Command-line root only, no `su`:
 `./scripts/deploy_ktool.sh`.
-
-Two steps in `-u` cannot change places:
-
-- `rmmod` runs **before** `enforce` — unloading a module needs `CAP_SYS_MODULE`, which the `shell`
-  domain is not granted; only the permissive window opened at the start lets it through;
-- the `sys_execve` patch is dropped **last** — after that root exec is refused, and only
-  `adb shell` (uid 2000) can still run the final `/data` cleanup.
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 

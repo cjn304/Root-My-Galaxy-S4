@@ -228,17 +228,12 @@ install_temp() {
 
 # ---- uninstall ------------------------------------------------------------
 #
-# What this can and cannot do without a reboot:
+# Everything runs without a reboot. What is left afterwards is the loaded
+# module (only if rmmod was refused) and whatever a reboot clears anyway.
 #
-#   yes  revoke the 8 avtab rules (echo avrestore > /dev/ktool)
-#   yes  drop the permissive window and flush AVC
-#   yes  restore init.sec.boot.sh, delete the /system files, wipe /data
-#   no   undo the exec_br patch
-#
-# The exec patch cannot be undone here on purpose: with the KNOX branch back in
-# place, even /system/bin/rm refuses to execute, so the deletions that follow
-# would fail. It lives in memory only and a reboot clears it. Everything else
-# is gone before the reboot, which is what matters.
+# Two steps cannot be reordered, and each one says why at the step itself:
+#   [4] rmmod needs the permissive window that [1] opened
+#   [5] unpatch is last — with the KNOX branch back, root exec is refused
 uninstall() {
 	case "$STATE" in
 	clean)
