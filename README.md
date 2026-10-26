@@ -19,45 +19,30 @@ check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
   (other builds: see [Porting](#porting-to-another-device))
 - `adb` on your PC, device connected over USB
 
-### 2. Install
+### 2. Install and uninstall
 
 ```sh
-./scripts/install.sh
+./scripts/install.sh      # persistent (default)
+./scripts/install.sh -t   # temporary, gone after a reboot
+./scripts/install.sh -u   # uninstall
 ```
 
-Installs both halves: `ktool` (the exploit plus the toolbox) and `su` (what apps actually talk
-to). It builds whatever is missing — so no toolchain is needed if prebuilt binaries are already in
-`src/` — then runs the two deploy steps in order. Both are idempotent.
+| Mode | Writes to `/system` | After a reboot | Notes |
+|---|---|---|---|
+| default | `ktool`, `su`, module, boot hook | root survives | Builds what is missing; prebuilt binaries in `src/` mean no toolchain needed |
+| `-t` | nothing | no root | Leaves only `/data/local/tmp/ktool_temp`; `ish`, `ctx` and the avtab rules are unavailable |
+| `-u` | removes all of it | gone for good | Revokes the 8 rules, restores the boot script, deletes the files, wipes `/data` |
 
 It probes the device first and prints what it found: `clean`, `temp`, `persistent` or `mixed`
-(the last one means an install was interrupted halfway).
+(an install that was interrupted halfway). Command-line root only, no `su`:
+`./scripts/deploy_ktool.sh`.
 
-For a one-session install that leaves nothing in `/system`:
+Two steps in `-u` cannot change places:
 
-```sh
-./scripts/install.sh -temp
-```
-
-This writes only `/data/local/tmp/ktool_temp` — no boot hook, no module, no `su`. After a reboot
-there is no root left, and the file can be deleted at any time. Commands that need the module
-(`ish`, `ctx`, the avtab rules) are not available in this mode.
-
-Only need command-line root? `./scripts/deploy_ktool.sh` deploys ktool alone.
-
-To undo a persistent install:
-
-```sh
-./scripts/install.sh -u
-```
-
-It revokes the 8 avtab rules, flushes AVC, restores the stock boot script (from
-`/data/local/tmp/init.sec.boot.sh.orig` if that backup exists, otherwise by deleting the marked
-block and syntax-checking the result), then deletes the `/system` files and wipes `/data`.
-
-The order at the end is not arbitrary. `rmmod` runs **before** `enforce`, because unloading the
-module needs `CAP_SYS_MODULE` and the `shell` domain is not granted it — the permissive window opened
-at the start is what lets it through. The `sys_execve` patch is dropped **last**: after that, root
-exec is refused, and only `adb shell` (uid 2000) can still run the final `/data` cleanup.
+- `rmmod` runs **before** `enforce` — unloading a module needs `CAP_SYS_MODULE`, which the `shell`
+  domain is not granted; only the permissive window opened at the start lets it through;
+- the `sys_execve` patch is dropped **last** — after that root exec is refused, and only
+  `adb shell` (uid 2000) can still run the final `/data` cleanup.
 
 Root prompts on the app side are handled by **phh's Superuser** — install it before granting root:
 
@@ -68,14 +53,17 @@ Source: https://github.com/phhusson/Superuser
 The `su` binary this project ships (`src/su_fork.c`) is an independent implementation of the same
 socket protocol.
 
-> **Tiers.** `0` deny all, `1` apps only, `2` ADB only, `3` apps + ADB. `adb shell su` works
-> without a prompt in tiers 2 and 3; app requests always go through the per-app allowlist and the
-> phh prompt. Measured on this device: `0` and `1` deny uid 2000, `2` and `3` return `uid=0`.
->
-> Changing the tier: use the Superuser settings screen, or write `/data/local/tmp/su_access_mode`
-> with `access_disabled` / `apps_only` / `adb_only` / `apps_and_adb` — that file takes precedence
-> over the property. `setprop persist.sys.root_access N` from `adb shell` reports success but is
-> silently dropped; the `shell` domain has no write permission on `system_prop`.
+| `persist.sys.root_access` | Meaning | `adb shell su` | App requests |
+|---|---|---|---|
+| `0` | deny all | refused | refused |
+| `1` | apps only | refused | allowlist + prompt |
+| `2` | ADB only | let through | refused |
+| `3` | apps + ADB | let through | allowlist + prompt |
+
+Change the tier from the Superuser settings screen, or write `/data/local/tmp/su_access_mode` with
+`access_disabled` / `apps_only` / `adb_only` / `apps_and_adb` — that file takes precedence over the
+property. `setprop persist.sys.root_access N` from `adb shell` reports success but is silently
+dropped: the `shell` domain has no write permission on `system_prop`.
 
 ### 3. Verify
 
@@ -85,13 +73,9 @@ adb shell 'getenforce'                          # Enforcing
 adb shell 'su -c id'                            # uid=0 (tiers 2 and 3)
 ```
 
-The first line uses the copy left in `/data/local/tmp` on purpose: `/system/bin/ktool` is
+The first line uses the copy in `/data/local/tmp` on purpose: `/system/bin/ktool` is
 `0700 root:root`, and the `shell` domain cannot execute it. Once `su` is installed you can use
-`adb shell 'su -c "/system/bin/ktool target"'` instead.
-
-Boot persistence is optional: `/data/local/tmp/ktool_new boot /system/lib/modules/ktool_mod.ko`,
-then install `scripts/init.sec.boot.v9g.sh` as `/system/etc/init.sec.boot.sh`. Keep it **LF** — CRLF
-makes mksh abort before running a single line.
+`su -c "/system/bin/ktool target"` instead.
 
 ---
 

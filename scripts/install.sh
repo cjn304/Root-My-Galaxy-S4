@@ -22,7 +22,7 @@ usage() {
 usage: install.sh [-t|-u]
 
   (no args)  persistent install: ktool + su under /system, boot hook installed
-  -t         temporary install: ktool only, in /data/local/tmp, gone after reboot
+  -t         temporary install: ktool only, in /data/local/tmp (root gone after reboot)
   -u         uninstall: restore the stock boot script, remove /system files
 EOF
 }
@@ -82,11 +82,11 @@ install_persistent() {
 		"$HERE/build.sh"
 	fi
 
-	echo "== [2/6] deploy ktool (+ module file) =="
-	# The .ko rides along with the ktool deploy: that script runs inside the
-	# permissive window, which is the only state in which the shell domain can
-	# write to /system/lib/modules. Doing it later, as its own step, fails —
-	# and doing it through su fails too, because su itself needs /dev/ktool,
+	echo "== [2/6] deploy ktool (+ module file + boot hook) =="
+	# Everything /system-bound rides along with the ktool deploy: that script
+	# runs inside the permissive window, which is the only state in which the
+	# shell domain can write to /system. Doing it later, as its own step, fails
+	# — and doing it through su fails too, because su itself needs /dev/ktool,
 	# which only exists once the module is loaded.
 	KO="$HERE/../kmod/ktool_mod.ko"
 	if [ -f "$KO" ]; then
@@ -98,8 +98,26 @@ install_persistent() {
 	else
 		echo "   kmod/ktool_mod.ko not built — module will be skipped"
 	fi
+	# Only the marked block, not the whole file: the lines before it are the
+	# device's own stock script and differ between firmware builds.
+	HOOK="$HERE/init.sec.boot.v9g.sh"
+	if [ -f "$HOOK" ]; then
+		sed -n '/2a auto begin/,/2a auto end/p' "$HOOK" > /tmp/ktool_hook.$$
+		if [ -s /tmp/ktool_hook.$$ ]; then
+			HOOKW=/tmp/ktool_hook.$$
+			if command -v cygpath >/dev/null 2>&1; then
+				HOOKW="$(cygpath -w /tmp/ktool_hook.$$)"
+			fi
+			adb push "$HOOKW" /data/local/tmp/boot_hook.sh >/dev/null
+		else
+			echo "   boot hook block not found in $HOOK — persistence will be skipped"
+		fi
+		rm -f /tmp/ktool_hook.$$
+	else
+		echo "   scripts/init.sec.boot.v9g.sh missing — persistence will be skipped"
+	fi
 	"$HERE/deploy_ktool.sh"
-	adb shell rm -f /data/local/tmp/ktool_mod.ko 2>/dev/null || true
+	adb shell rm -f /data/local/tmp/ktool_mod.ko /data/local/tmp/boot_hook.sh 2>/dev/null || true
 
 	echo "== [3/6] su binary =="
 	if [ -f "$SRC/su_new" ]; then

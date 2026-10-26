@@ -18,62 +18,48 @@
   （其它版本见 [移植](#移植到其它机型)）
 - 电脑上有 `adb`，设备用 USB 连上
 
-### 2. 安装
+### 2. 安装和卸载
 
 ```sh
-./scripts/install.sh
+./scripts/install.sh      # 持久化（默认）
+./scripts/install.sh -t   # 临时，重启失效
+./scripts/install.sh -u   # 卸载
 ```
 
-这一条会装上两半：`ktool`（exploit 加工具箱）和 `su`（应用实际打交道的授权前端）。缺什么编什么
-—— 如果 `src/` 里已经有预编译好的二进制，就不需要交叉工具链 —— 然后按顺序跑两步部署。两步都是
-幂等的，重复跑没问题。
+| 模式 | 写 `/system` | 重启后 | 说明 |
+|---|---|---|---|
+| 默认 | `ktool`、`su`、模块、开机脚本 | root 保持 | 缺什么编什么；`src/` 里已有预编译二进制就不需要工具链 |
+| `-t` | 不写 | root 消失 | 只留 `/data/local/tmp/ktool_temp`；`ish`、`ctx`、avtab 规则不可用 |
+| `-u` | 全部删除 | 不复存在 | 撤 8 条规则、恢复开机脚本、删文件、清 `/data` |
 
-它会先探测设备并打印当前状态：`clean`、`temp`、`persistent` 或 `mixed`（最后一种表示上次安装中途
-中断过）。
+运行前会探测并打印状态：`clean`、`temp`、`persistent`、`mixed`（装了一半）。只想要命令行 root、
+不需要 `su`：`./scripts/deploy_ktool.sh`。
 
-如果只想要一次性的 root，不想在 `/system` 留任何东西：
+`-u` 有两处顺序不能挪：
 
-```sh
-./scripts/install.sh -temp
-```
+- `rmmod` 在 `enforce` **之前** —— 卸载模块要 `CAP_SYS_MODULE`，`shell` 域没有被授予这个能力，
+  只有开头打开的 permissive 窗口能让它过去；
+- `sys_execve` 补丁**最后**撤 —— 撤完 root 的 exec 被拒，只剩 `adb shell`（uid 2000）还能跑
+  收尾的 `/data` 清理。
 
-这种模式只往 `/data/local/tmp/ktool_temp` 写一个文件 —— 不装开机脚本、不加载模块、不装 `su`。
-重启后 root 就没了，那个文件也可以随时删。依赖模块的命令（`ish`、`ctx`、avtab 规则）在这个模式下
-不可用。
-
-只要命令行 root？`./scripts/deploy_ktool.sh` 单独部署 ktool。
-
-要把持久化安装撤掉：
-
-```sh
-./scripts/install.sh -u
-```
-
-它会撤回 8 条 avtab 规则、清 AVC 缓存、恢复原版开机脚本（有
-`/data/local/tmp/init.sec.boot.sh.orig` 备份就用它，否则删掉标记块再做语法检查），然后删掉
-`/system` 上的文件、清空 `/data`。
-
-最后几步的顺序不是随意的。`rmmod` 在 `enforce` **之前**：卸载模块需要 `CAP_SYS_MODULE`，而
-`shell` 域没有被授予这个能力 —— 全靠开头打开的那个 permissive 窗口才过得去。`sys_execve` 补丁
-放在**最后**撤：撤完之后 root 的 exec 被拒，只有 `adb shell`（uid 2000）还能跑最后的 `/data`
-清理。
-
-应用侧的 root 弹窗由 **phh's Superuser** 处理，授权前先装上它：
+应用侧弹窗由 **phh's Superuser** 处理，授权前先装：
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
 源码：https://github.com/phhusson/Superuser
 
-本项目发布的 `su` 二进制（`src/su_fork.c`）是同一套 socket 协议的独立实现。
+本项目的 `su`（`src/su_fork.c`）是同一套 socket 协议的独立实现。
 
-> **四档。** `0` 全拒，`1` 只放应用，`2` 只放 ADB，`3` 应用 + ADB。`adb shell su` 在 2 和 3 两档
-> 下不弹窗直接放行；应用请求始终要走 allowlist 和 phh 弹窗。本机实测：`0` 和 `1` 拒绝 uid 2000，
-> `2` 和 `3` 返回 `uid=0`。
->
-> 改档：用 Superuser 设置页，或者写 `/data/local/tmp/su_access_mode`，内容为
-> `access_disabled` / `apps_only` / `adb_only` / `apps_and_adb` —— 这个文件的优先级高于属性。
-> 从 `adb shell` 执行 `setprop persist.sys.root_access N` 会报告成功但被静默丢弃：`shell` 域对
-> `system_prop` 没有写权限。
+| `persist.sys.root_access` | 含义 | `adb shell su` | 应用请求 |
+|---|---|---|---|
+| `0` | 全拒 | 拒 | 拒 |
+| `1` | 只放应用 | 拒 | allowlist + 弹窗 |
+| `2` | 只放 ADB | 直接放行 | 拒 |
+| `3` | 应用 + ADB | 直接放行 | allowlist + 弹窗 |
+
+改档用 Superuser 设置页，或写 `/data/local/tmp/su_access_mode`（`access_disabled` / `apps_only` /
+`adb_only` / `apps_and_adb`），优先级高于属性。从 `adb shell` 执行
+`setprop persist.sys.root_access N` 会报告成功但被静默丢弃 —— `shell` 域对 `system_prop` 没有写权限。
 
 ### 3. 验证
 
@@ -83,12 +69,8 @@ adb shell 'getenforce'                          # Enforcing
 adb shell 'su -c id'                            # uid=0（需要 2 或 3 档）
 ```
 
-第一条故意用 `/data/local/tmp` 里的副本：`/system/bin/ktool` 是 `0700 root:root`，`shell` 域执行
-不了它。装好 `su` 之后，也可以改用 `adb shell 'su -c "/system/bin/ktool target"'`。
-
-开机保持是可选的：`/data/local/tmp/ktool_new boot /system/lib/modules/ktool_mod.ko`，然后把
-`scripts/init.sec.boot.v9g.sh` 装成 `/system/etc/init.sec.boot.sh`。这个文件必须是 **LF** ——
-CRLF 会让 mksh 连一行都执行不到就退出。
+第一条用 `/data/local/tmp` 的副本是故意的：`/system/bin/ktool` 是 `0700 root:root`，`shell` 域
+执行不了。装好 `su` 之后也可以改用 `su -c "/system/bin/ktool target"`。
 
 ---
 

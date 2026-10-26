@@ -61,6 +61,32 @@ fi
 chcon u:object_r:system_file:s0 "$SYS" || echo "chcon failed (label may already be right)"
 ls -lZ "$SYS"
 
+echo "== 3b. boot hook =="
+# Only the marked block is appended. The lines before it are the device's own
+# stock script and are not the same across firmware builds, so replacing the
+# whole file would silently drop whatever Samsung put there.
+BOOT=/system/etc/init.sec.boot.sh
+BOOTBAK=/data/local/tmp/init.sec.boot.sh.orig
+if [ -f /data/local/tmp/boot_hook.sh ]; then
+	if grep -q "2a auto begin" "$BOOT" 2>/dev/null; then
+		echo "boot hook: already present, left alone"
+	else
+		# First clean copy becomes the restore point install.sh -u copies back.
+		[ -f "$BOOTBAK" ] || cp "$BOOT" "$BOOTBAK"
+		# The stock file need not end with a newline.
+		printf '\n' >> "$BOOT"
+		cat /data/local/tmp/boot_hook.sh >> "$BOOT"
+		if sh -n "$BOOT" 2>/dev/null; then
+			echo "boot hook: installed, syntax ok"
+		else
+			cp "$BOOTBAK" "$BOOT"
+			echo "boot hook: SYNTAX FAIL after append — reverted"
+		fi
+	fi
+else
+	echo "boot hook: not provided"
+fi
+
 echo "== 4. remount ro =="
 mount -o ro,remount /system || echo "warn: still rw"
 
@@ -68,6 +94,16 @@ echo "== 5. self test =="
 "$SYS" target || echo "self test FAILED — binary runs but target lookup failed"
 
 echo "== 6. close the permissive window =="
-"$SYS" enforce || echo "enforce FAILED — run 'ktool enforce' manually"
+# rc=4 is not a failure here: it means permissive_map was cleared but the AVC
+# cache could not be flushed, because avcflush goes through the module and on a
+# fresh install the module is not loaded yet. install.sh loads it and runs
+# enforce again, which is when the flush actually lands.
+"$SYS" enforce
+enforce_rc=$?
+case "$enforce_rc" in
+0) ;;
+4) echo "enforce: map cleared, AVC flush deferred to the activation step" ;;
+*) echo "enforce FAILED rc=$enforce_rc — run 'ktool enforce' manually" ;;
+esac
 
 echo DEPLOY_OK
