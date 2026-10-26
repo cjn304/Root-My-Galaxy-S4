@@ -127,10 +127,14 @@ there is no canonical tree to point at. What exists, and what each is good for:
 | [LineageOS/android_kernel_samsung_exynos5410](https://github.com/LineageOS/android_kernel_samsung_exynos5410) (`cm-11.0-old`) | 3.4.5 | same base version as the above, so it can stand in for it |
 | [exynos5410/android_kernel_samsung_exynos5410](https://github.com/exynos5410/android_kernel_samsung_exynos5410) (`cm-14.1`) | **3.4.67** | reference only — 62 stable releases ahead, so vermagic will not match and plenty of layouts moved |
 
-The third one is interesting for another reason: one of its commits merges
-Samsung's own `I9500XXUHQD1` drop, the same build generation as this device's
-`ZSSHQD1` (both end in `HQD1`; this kernel is dated 2017-04-01, same month).
-That makes it worth reading, not worth compiling into a 3.4.5 device.
+The third one carries a commit named `i9500: merge Samsung Kernel Source
+I9500XXUHQD1`. Despite the name it is not the full drop — 13 files, 166 lines,
+the April-2017 security patches (binder `%p` to `%pK`, udp checksum, sctp chunk
+length, `task_tgid_nr_ns`, and so on). What it does leak is how Samsung built
+the thing: the `build_kernel.sh` it adds uses `arm-eabi-4.8` with
+`ja3g_00_defconfig`, and this kernel's `/proc/version` says `gcc version 4.8`.
+`ja3g` is also this device's `ro.product.device`. Useful as a cross-check,
+still not the tree the firmware came from.
 
 None of these is the tree the firmware was compiled from. The `cred` offset
 differs by 16 bytes between the first one and the device, which is the whole
