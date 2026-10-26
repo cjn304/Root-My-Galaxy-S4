@@ -410,7 +410,7 @@ Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry tim
 | `unroot` | Restore the cred snapshot taken by `promote` (validates task/comm first) |
 | `pwn [cmd]` | Escalate + full permissive, then `exec` |
 | `sh` | Apply exec patch + switch to `init_shell`, then hand over a shell |
-| `boot <ko>` | `lkmauth_bootmode=2` + permissive + `insmod` |
+| `boot <ko>` | Root, set `lkmauth_bootmode=2`, full permissive, apply the exec patch, then `exec insmod <ko>` — five steps in one exploit run. The exec patch is required: the KNOX branch at `c0012164` blocks a kernel-domain `exec`, and without it `insmod` returns EACCES |
 | `who` | Current uid/euid/gid/caps |
 | `caps` | Fill all capability sets on the current cred |
 | `showcred` | Dump creds of every task in the list |
@@ -420,7 +420,7 @@ Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry tim
 | Command | Description |
 |---|---|
 | `permissive [bit]` | Set a single `permissive_map` bit (defaults to `init_shell`) |
-| `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC (aliases `unperm`, `restore`). `--noflush` does **not** actually restore enforcement |
+| `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC (aliases `unperm`, `restore`). It only undoes the in-memory permissive window — it does not uninstall anything. `--noflush` does **not** actually restore enforcement |
 | `flush [-y]` | AVC flush only; `-y` skips the 3 s warning |
 | `patch` / `unpatch` | Apply / revert the KNOX `sys_execve` branch patch |
 | `setsid <sid\|init_shell> <cmd...>` | Rewrite the current `cred->security->sid`, then exec. Rescue path when the AVC cache is deadlocked |

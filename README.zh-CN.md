@@ -395,7 +395,7 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 | `unroot` | 用 `promote` 留下的快照还原 cred（先校验 task/comm） |
 | `pwn [cmd]` | 提权 + 全量 permissive，然后 `exec` |
 | `sh` | 打 exec 补丁 + 切到 `init_shell`，然后交给 shell |
-| `boot <ko>` | `lkmauth_bootmode=2` + permissive + `insmod` |
+| `boot <ko>` | 提权、置 `lkmauth_bootmode=2`、全量 permissive、打 exec 补丁，然后 `exec insmod <ko>` —— 一次 exploit 跑完五步。exec 补丁是必需的：`c0012164` 处的 KNOX 分支会拦 kernel 域的 `exec`，不打的话 `insmod` 直接 EACCES |
 | `who` | 当前 uid/euid/gid/caps |
 | `caps` | 把当前 cred 的所有 capability 组填满 |
 | `showcred` | dump 链表里每个 task 的凭据 |
@@ -405,7 +405,7 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 | 命令 | 说明 |
 |---|---|
 | `permissive [bit]` | 置 `permissive_map` 的单个位（默认 `init_shell`） |
-| `enforce [--noflush]` | 清 `permissive_map` + 还原 `modprobe_path` + flush AVC（别名 `unperm`、`restore`）。`--noflush` 并**没有**真正恢复强制 |
+| `enforce [--noflush]` | 清 `permissive_map` + 还原 `modprobe_path` + flush AVC（别名 `unperm`、`restore`）。它只撤销内存里的 permissive 窗口 —— 不会卸载任何东西。`--noflush` 并**没有**真正恢复强制 |
 | `flush [-y]` | 只清 AVC 缓存；`-y` 跳过 3 秒警告 |
 | `patch` / `unpatch` | 打上 / 撤销 KNOX 的 `sys_execve` 分支补丁 |
 | `setsid <sid\|init_shell> <cmd...>` | 改写当前 `cred->security->sid` 然后 exec。AVC 缓存死锁时的救援通道 |
