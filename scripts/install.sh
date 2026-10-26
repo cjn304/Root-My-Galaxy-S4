@@ -75,27 +75,68 @@ install_persistent() {
 	clean)      : ;;
 	esac
 
-	echo "== [1/4] ktool binary =="
+	echo "== [1/7] ktool binary =="
 	if [ -f "$SRC/ktool" ]; then
 		echo "src/ktool present, skipping build"
 	else
 		"$HERE/build.sh"
 	fi
 
-	echo "== [2/4] deploy ktool =="
+	echo "== [2/7] deploy ktool =="
 	"$HERE/deploy_ktool.sh"
 
-	echo "== [3/4] su binary =="
+	echo "== [3/7] kernel module =="
+	# pwn, not root: deploy_ktool.sh closes the permissive window when it
+	# finishes, and a remount on an enforcing kernel is refused. deploy_su.sh
+	# closes it again at the end.
+	# Nothing else deploys this file. Without it the boot hook's insmod fails and
+	# 'ish' / 'ctx' / the avtab rules are unavailable, so -u (which deletes it)
+	# could never be followed by a working reinstall.
+	KO="$HERE/../kmod/ktool_mod.ko"
+	if [ -f "$KO" ]; then
+		adb push "$KO" /data/local/tmp/ktool_mod.ko >/dev/null
+		adb shell '/data/local/tmp/ktool_new pwn /system/bin/sh -c "
+			mount -o rw,remount /system || exit 10
+			cp /data/local/tmp/ktool_mod.ko /system/lib/modules/ktool_mod.ko || exit 11
+			chown 0:0 /system/lib/modules/ktool_mod.ko
+			chmod 644 /system/lib/modules/ktool_mod.ko
+			chcon u:object_r:system_file:s0 /system/lib/modules/ktool_mod.ko
+			mount -o ro,remount /system
+			echo module-deployed
+		"' | grep -E "module-deployed|exit|fail" || echo "   module deploy FAILED"
+		adb shell rm -f /data/local/tmp/ktool_mod.ko
+	else
+		echo "   kmod/ktool_mod.ko not built — skipping."
+		echo "   build it first:  cd kmod && make KDIR=<kernel tree>"
+		echo "   without it: 'ish', 'ctx' and the avtab rules will not work."
+	fi
+
+	echo "== [4/7] su binary =="
 	if [ -f "$SRC/su_new" ]; then
 		echo "src/su_new present, skipping build"
 	else
 		"$HERE/build_su.sh"
 	fi
 
-	echo "== [4/4] deploy su =="
+	echo "== [5/7] deploy su =="
 	"$HERE/deploy_su.sh"
 
-	echo "== done: ktool + su installed (persistent) =="
+	echo "== [6/7] activate now =="
+	# Everything above only put files on disk; the module is not loaded and the
+	# avtab rules are not in the policy until something runs boot. Doing it here
+	# is what makes install -> uninstall -> install repeatable without rebooting.
+	if [ "$HAS_MOD" = 0 ]; then
+		adb shell '/data/local/tmp/ktool_new patch' 2>&1 | grep -v '^$' || \
+			echo "   patch failed"
+		adb shell '/data/local/tmp/ktool_new boot /system/lib/modules/ktool_mod.ko' 2>&1 |
+			grep -v '^$' || echo "   boot failed"
+		adb shell '/data/local/tmp/ktool_new enforce' 2>&1 | grep -v '^$' || true
+	else
+		echo "   module already loaded, nothing to activate"
+	fi
+
+	echo "== [7/7] done: ktool + module + su installed (persistent) =="
+	echo "   root survives reboots via /system/etc/init.sec.boot.sh"
 }
 
 # ---- temporary ------------------------------------------------------------
