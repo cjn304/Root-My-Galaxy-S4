@@ -337,8 +337,8 @@ python3 tools/sepolicy_parse.py sepolicy .
 2. `ktool backend probe` — must print `probe(init_task=...): OK`
 3. `ktool dump <init_task> 64` — should decode as a plausible `task_struct`
 4. `ktool sym init_task` — must agree with the table
-5. Only after the full chain (root → mount → module → enforce → Enforcing) is confirmed on
-   hardware, flip `verified = 1` and write what you tested into `note`
+5. Only after the full chain (root → mount → module → `ktool enforce` → `getenforce` reports
+   `Enforcing`) is confirmed on hardware, flip `verified = 1` and write what you tested into `note`
 
 If any of these disagree, **do not proceed** — guessing addresses in kernel `.data` is how you
 turn a phone into a brick.

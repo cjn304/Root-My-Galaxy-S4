@@ -324,8 +324,8 @@ python3 tools/sepolicy_parse.py sepolicy .
 2. `ktool backend probe` —— 必须打印 `probe(init_task=...): OK`
 3. `ktool dump <init_task> 64` —— 应该能解出像样的 `task_struct`
 4. `ktool sym init_task` —— 必须与表里一致
-5. 只有在真机上把整条链（root → mount → 模块 → enforce → Enforcing）走通之后，才把
-   `verified` 改成 1，并把测过什么写进 `note`
+5. 只有在真机上把整条链（root → mount → 模块 → `ktool enforce` → `getenforce` 显示
+   `Enforcing`）走通之后，才把 `verified` 改成 1，并把测过什么写进 `note`
 
 任何一条对不上，**就不要往下走** —— 在内核 `.data` 里猜地址，是把手机变砖的标准姿势。
 
