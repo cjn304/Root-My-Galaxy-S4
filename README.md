@@ -86,6 +86,14 @@ make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 
 `KDIR` must point at a configured GT-I9500 tree (with `.config` and `Module.symvers`).
 
+One caveat before trusting that tree: `vermagic` is a **string**, and it comes straight from
+`EXTRAVERSION` in the kernel `Makefile`. Typing the device's build number there is enough to make
+`insmod` accept a module built from a tree the firmware was never built from — and with
+`CONFIG_MODVERSIONS` unset (as on this kernel) nothing checks struct layouts afterwards. The tree
+in this project came from a community repo and needed exactly that one-line edit, which is why
+`cred` sits at `+0x2EC` there but `+0x2FC` on the device. Every offset in `targets.h` was measured
+on hardware, not derived from source.
+
 ---
 
 ## Status

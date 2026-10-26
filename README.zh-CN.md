@@ -81,6 +81,12 @@ make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 
 `KDIR` 必须指向一份已配置好的 GT-I9500 内核树（含 `.config` 和 `Module.symvers`）。
 
+用这棵树之前要知道一件事：`vermagic` 是一串**字符串**，直接来自内核 `Makefile` 的
+`EXTRAVERSION`。把设备的 build 号敲进去，就足以让 `insmod` 接受一份「固件根本不是用它编的」的
+模块 —— 而 `CONFIG_MODVERSIONS` 没开（本机就是），之后没有任何东西再校验结构体布局。
+本项目的源码树来自一个社区仓库，恰好就是这么改了一行：`cred` 在那边算出来是 `+0x2EC`，
+设备上实在 `+0x2FC`。所以 `targets.h` 里每个偏移都是在真机上量的，不是从源码推的。
+
 ---
 
 ## 现状
