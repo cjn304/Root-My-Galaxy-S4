@@ -41,7 +41,7 @@ Root prompts on the app side are handled by **phh's Superuser** — install it b
 
 https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/
 
-Source: https://github.com/phhusson/Superuser
+Source: [phhusson/Superuser](https://github.com/phhusson/Superuser)
 
 The `su` binary this project ships (`src/su_fork.c`) is an independent implementation of the same
 socket protocol.

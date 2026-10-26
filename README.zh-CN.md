@@ -39,7 +39,7 @@
 
 <https://fxedel.gitlab.io/fdroid-website/en/packages/me.phh.superuser/>
 
-源码：<https://github.com/phhusson/Superuser>
+源码：[phhusson/Superuser](https://github.com/phhusson/Superuser)
 
 本项目的 `su`（`src/su_fork.c`）是同一套 socket 协议的独立实现。
 
