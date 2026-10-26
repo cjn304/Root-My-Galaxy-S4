@@ -22,16 +22,16 @@ check noticing the `/system` changes, not the e-fuse, and it is purely cosmetic.
 ### 2. Install and uninstall
 
 ```sh
-./scripts/install.sh      # persistent (default)
+./scripts/install.sh      # persistent
 ./scripts/install.sh -t   # temporary, gone after a reboot
 ./scripts/install.sh -u   # uninstall
 ```
 
-| Mode | Writes to `/system` | After a reboot | Notes |
-|---|---|---|---|
-| default | `ktool`, `su`, module, boot hook | root survives | Builds what is missing; prebuilt binaries in `src/` mean no toolchain needed |
-| `-t` | nothing | no root | Leaves only `/data/local/tmp/ktool_temp`; `ish`, `ctx` and the avtab rules are unavailable |
-| `-u` | removes all of it | gone for good | Revokes the 8 rules, restores the boot script, deletes the files, wipes `/data` |
+| Mode | Writes to `/system` | Notes |
+|---|---|---|
+| persistent | `ktool`, `su`, module, boot hook | Builds what is missing; prebuilt binaries in `src/` mean no toolchain needed |
+| `-t` | nothing | Leaves only `/data/local/tmp/ktool_temp`; `ish`, `ctx` and the avtab rules are unavailable |
+| `-u` | removes all of it | Revokes the 8 rules, restores the boot script, deletes the files, wipes `/data` |
 
 It probes the device first and prints what it found: `clean`, `temp`, `persistent` or `mixed`
 (an install that was interrupted halfway). Command-line root only, no `su`:

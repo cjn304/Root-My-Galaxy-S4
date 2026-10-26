@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-#   ./install.sh          persistent install (default)
+#   ./install.sh          persistent install
 #   ./install.sh -t        temporary: /data/local/tmp only, gone after reboot
 #   ./install.sh -u       uninstall, back to stock without flashing
 #

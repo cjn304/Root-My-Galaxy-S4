@@ -21,16 +21,16 @@
 ### 2. 安装和卸载
 
 ```sh
-./scripts/install.sh      # 持久化（默认）
+./scripts/install.sh      # 持久化
 ./scripts/install.sh -t   # 临时，重启失效
 ./scripts/install.sh -u   # 卸载
 ```
 
-| 模式 | 写 `/system` | 重启后 | 说明 |
-|---|---|---|---|
-| 默认 | `ktool`、`su`、模块、开机脚本 | root 保持 | 缺什么编什么；`src/` 里已有预编译二进制就不需要工具链 |
-| `-t` | 不写 | root 消失 | 只留 `/data/local/tmp/ktool_temp`；`ish`、`ctx`、avtab 规则不可用 |
-| `-u` | 全部删除 | 不复存在 | 撤 8 条规则、恢复开机脚本、删文件、清 `/data` |
+| 模式 | 写 `/system` | 说明 |
+|---|---|---|
+| 持久化 | `ktool`、`su`、模块、开机脚本 | 缺什么编什么；`src/` 里已有预编译二进制就不需要工具链 |
+| `-t` | 不写 | 只留 `/data/local/tmp/ktool_temp`；`ish`、`ctx`、avtab 规则不可用 |
+| `-u` | 全部删除 | 撤 8 条规则、恢复开机脚本、删文件、清 `/data` |
 
 运行前会探测并打印状态：`clean`、`temp`、`persistent`、`mixed`（装了一半）。只想要命令行 root、
 不需要 `su`：`./scripts/deploy_ktool.sh`。
