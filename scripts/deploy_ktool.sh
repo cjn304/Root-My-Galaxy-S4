@@ -18,7 +18,7 @@ export MSYS_NO_PATHCONV=1
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BIN="${1:-$HERE/../src/ktool}"
-DEV="$HERE/device/deploy_ktool.sh"
+DEV="$HERE/device_ktool.sh"
 
 [ -f "$BIN" ] || { echo "找不到 $BIN（先跑 ./build.sh）"; exit 1; }
 [ -f "$DEV" ] || { echo "找不到 $DEV"; exit 1; }

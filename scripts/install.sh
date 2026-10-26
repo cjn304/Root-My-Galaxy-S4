@@ -127,7 +127,48 @@ install_persistent() {
 	fi
 
 	echo "== [4/6] deploy su =="
-	"$HERE/deploy_su.sh"
+	# Inlined from the old deploy_su.sh: it had no standalone entry point and
+	# could not run unless deploy_ktool.sh had already left
+	# /data/local/tmp/ktool_new behind, so the extra layer only added a file.
+	#
+	# Two things from that script are here on purpose. The version check refuses
+	# to install a binary that cannot print its own version — a su that starts
+	# but breaks later is worse than no su. And nothing writes
+	# /data/system/su_allow: the old device-side script put "2000" there, which
+	# silently grants adb permanent root and bypasses the tier setting.
+	SU="$SRC/su_new"
+	if [ ! -f "$SU" ]; then
+		echo "   $SU missing — skipping su (build it with ./scripts/build_su.sh)"
+	else
+		SUW="$SU"
+		if command -v cygpath >/dev/null 2>&1; then
+			SUW="$(cygpath -w "$SU")"
+		fi
+		adb push "$SUW" /data/local/tmp/su_new >/dev/null
+		adb shell chmod 755 /data/local/tmp/su_new
+		V=$(adb shell '/data/local/tmp/su_new -v' 2>&1 | tr -d '\r')
+		case "$V" in
+		17*) echo "   self test ok: $V" ;;
+		*)   echo "   self test FAILED: $V"; exit 2 ;;
+		esac
+		# deploy_ktool.sh closed the permissive window when it finished, and a
+		# remount on an enforcing kernel is refused. Step 5 closes it again.
+		adb shell '/data/local/tmp/ktool_new pwn /system/bin/sh -c true' >/dev/null 2>&1 || true
+		# Best effort: avcflush goes through the module, which may not be loaded
+		# yet. Step 5 runs enforce after insmod, and that one does flush.
+		adb shell '/data/local/tmp/ktool_new flush -y' >/dev/null 2>&1 || \
+			echo "   flush skipped (module not loaded yet; step 5 flushes)"
+		adb shell "/data/local/tmp/ktool_new root /system/bin/sh -c '
+			mount -o rw,remount /system || exit 10
+			cp /system/xbin/su /data/local/tmp/su_prev.bak 2>/dev/null
+			cp /data/local/tmp/su_new /system/xbin/su || exit 11
+			chown 0:0 /system/xbin/su
+			chmod 755 /system/xbin/su
+			chcon u:object_r:su_exec:s0 /system/xbin/su
+			mount -o ro,remount /system
+			echo deployed
+		'" | grep -E "deployed|denied|fail" || echo "   su deploy FAILED"
+	fi
 
 	echo "== [5/6] activate now =="
 	# Everything above only put files on disk; the module is not loaded and the
