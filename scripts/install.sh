@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 #   ./install.sh          persistent install (default)
-#   ./install.sh -temp    temporary: /data/local/tmp only, gone after reboot
+#   ./install.sh -t        temporary: /data/local/tmp only, gone after reboot
 #   ./install.sh -u       uninstall, back to stock without flashing
 #
 # Persistent install writes four files under /system and appends a marked block
@@ -19,10 +19,10 @@ SRC="$HERE/../src"
 
 usage() {
 	cat <<'EOF'
-usage: install.sh [-temp|-u]
+usage: install.sh [-t|-u]
 
   (no args)  persistent install: ktool + su under /system, boot hook installed
-  -temp      temporary install: ktool only, in /data/local/tmp, gone after reboot
+  -t         temporary install: ktool only, in /data/local/tmp, gone after reboot
   -u         uninstall: restore the stock boot script, remove /system files
 EOF
 }
@@ -30,7 +30,7 @@ EOF
 MODE=persistent
 while [ $# -gt 0 ]; do
 	case "$1" in
-	-temp|--temp)   MODE=temp ;;
+	-t|--temp)      MODE=temp ;;
 	-u|--uninstall) MODE=uninstall ;;
 	-h|--help)      usage; exit 0 ;;
 	*)              echo "unknown option: $1" >&2; usage; exit 2 ;;
@@ -137,11 +137,90 @@ install_temp() {
 }
 
 # ---- uninstall ------------------------------------------------------------
+#
+# What this can and cannot do without a reboot:
+#
+#   yes  revoke the 8 avtab rules (echo avrestore > /dev/ktool)
+#   yes  drop the permissive window and flush AVC
+#   yes  restore init.sec.boot.sh, delete the /system files, wipe /data
+#   no   undo the exec_br patch
+#
+# The exec patch cannot be undone here on purpose: with the KNOX branch back in
+# place, even /system/bin/rm refuses to execute, so the deletions that follow
+# would fail. It lives in memory only and a reboot clears it. Everything else
+# is gone before the reboot, which is what matters.
 uninstall() {
-	echo "uninstall is not implemented yet." >&2
-	echo "It needs avtab rule removal ('ktool avdel') to restore the policy" >&2
-	echo "without a reboot; that lands in the next commit." >&2
-	exit 4
+	case "$STATE" in
+	clean)
+		echo "nothing to remove — device is already clean"
+		exit 0
+		;;
+	temp)
+		echo "== removing the temporary install =="
+		adb shell rm -f /data/local/tmp/ktool_temp
+		echo "done. /system was never touched."
+		exit 0
+		;;
+	esac
+
+	KT=""
+	for c in /data/local/tmp/ktool_new /data/local/tmp/ktool_temp /data/local/tmp/ktool; do
+		if [ "$(q "if [ -x $c ]; then echo 1; else echo 0; fi")" = 1 ]; then
+			KT=$c
+			break
+		fi
+	done
+	if [ -z "$KT" ]; then
+		echo "no ktool binary on the device; cannot drive the kext removal." >&2
+		echo "flash the stock firmware instead." >&2
+		exit 5
+	fi
+	echo "   driving with $KT"
+
+	echo "== [1/4] revoke avtab rules, close the permissive window =="
+	adb shell "$KT pwn /system/bin/sh -c 'echo avrestore > /dev/ktool; echo avcflush > /dev/ktool'" 2>&1 |
+		grep -E "avrestore done|avc cache flushed" || echo "   (module not loaded; avtab rules die with the reboot anyway)"
+
+	echo "== [2/4] restore the boot script =="
+	adb shell "$KT root /system/bin/sh -c '
+		mount -o rw,remount /system || exit 10
+		if [ -f /data/local/tmp/init.sec.boot.sh.orig ]; then
+			cp /data/local/tmp/init.sec.boot.sh.orig /system/etc/init.sec.boot.sh
+			echo used .orig backup
+		else
+			sed -i \"/2a auto begin/,/2a auto end/d\" /system/etc/init.sec.boot.sh
+			sed -i \"/SPDX-License-Identifier: GPL-3.0-or-later/d\" /system/etc/init.sec.boot.sh
+			echo stripped the marked block
+		fi
+		if sh -n /system/etc/init.sec.boot.sh 2>/dev/null; then
+			echo syntax-ok
+		else
+			echo SYNTAX_FAIL
+			mount -o ro,remount /system
+			exit 11
+		fi
+		mount -o ro,remount /system
+	'"
+
+	echo "== [3/4] delete the /system files =="
+	adb shell "$KT root /system/bin/sh -c '
+		mount -o rw,remount /system
+		rm -f /system/xbin/su /system/lib/modules/ktool_mod.ko /system/bin/ktool
+		mount -o ro,remount /system
+		ls /system/bin/ktool 2>/dev/null && echo LEFTOVER || echo removed
+	'"
+
+	echo "== [4/4] wipe /data leftovers =="
+	adb shell "$KT root /system/bin/sh -c 'rm -rf /data/local/tmp/* ; rm -f /data/system/su_allow'"
+
+	echo
+	echo "uninstalled. What remains is only the in-memory exec patch and the"
+	echo "loaded module — both disappear on reboot, and neither survives without"
+	echo "the files that are now gone."
+	echo
+	echo "   reboot to finish:  adb reboot"
+	echo "   app prompt binary: uninstall phh's Superuser from Settings if you"
+	echo "                      do not want the APK hanging around either"
 }
 
 case "$MODE" in

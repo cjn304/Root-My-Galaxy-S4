@@ -6,6 +6,7 @@
  *   echo "root <pid>" > /dev/ktool   给指定进程提权（kernel 域）
  *   echo "root"       > /dev/ktool   给写接口的当前进程提权（kernel 域）
  *   echo "ish"        > /dev/ktool   当前进程 -> uid 0 + u:r:init_shell:s0
+ *   echo "avrestore"   > /dev/ktool   撤回插入的 8 条 avtab 规则
  *   cat /dev/ktool                   查看当前进程的 uid / SID
  *
  * /dev/ktool 在 init 时被重标为 null_device，shell 域在 enforcing 下也能写。
@@ -178,7 +179,8 @@ static int ktool_allow(const char *kbuf)
 	/* 只有这三个命令需要过 /dev/ktool，其余（root/w32/...）走 ktool 用户态 */
 	int priv = !strncmp(kbuf, "ish", 3) || !strncmp(kbuf, "ctx ", 4) ||
 		   !strncmp(kbuf, "avrule", 6) || !strncmp(kbuf, "avset", 5) ||
-		   !strncmp(kbuf, "avcflush", 8) || !strncmp(kbuf, "warntest", 8) ||
+		   !strncmp(kbuf, "avcflush", 8) || !strncmp(kbuf, "avrestore", 9) ||
+		   !strncmp(kbuf, "warntest", 8) ||
 		   !strncmp(kbuf, "bugtest", 7) || !strncmp(kbuf, "waiter ", 7) ||
 		   !strncmp(kbuf, "fixlbl", 6) || !strncmp(kbuf, "lbldbg", 6) ||
 		   !strncmp(kbuf, "kread ", 6) || !strncmp(kbuf, "ksym ", 5) ||
@@ -647,6 +649,14 @@ module_param_named(av_shell_type, p4k_shell_type, int, 0444);
 static int p4k_system_prop_type = 342;
 module_param_named(av_sysprop_type, p4k_system_prop_type, int, 0444);
 
+/*
+ * untrusted_app -> shell_data_file:dir 这条原策略就有，插入时是 OR 上去的，
+ * 所以回收只能覆盖回原值。0x00500013 = getattr|ioctl|open|read|search，
+ * 从本机 sepolicy 解出来的；换 ROM 用 tools/avtab_query.py 重算。
+ */
+static int p4k_dir_orig_mask = 0x00500013;
+module_param_named(av_dir_orig_mask, p4k_dir_orig_mask, int, 0444);
+
 #define P4K_NPRIM_TYPES		1343
 #define P4K_NPRIM_CLASSES	86
 
@@ -794,6 +804,67 @@ static int ktool_avrule_ex(int src, int tgt, int cls, u32 mask, int or_mode)
 	printk(KERN_INFO "ktool: avrule %d->%d:%d ADD %#x node=%p slot=%d nel=%u\n",
 	       src, tgt, cls, mask, node, hv, av->nel);
 	return 0;
+}
+
+/*
+ * 摘掉 (src,tgt,cls,ALLOWED) 节点 —— uninstall 时回收插进去的规则。
+ *
+ * 不 kfree：avtab_search_node() 遍历链表时不在链表上加锁（内核假定策略加载
+ * 完就是只读的），free 掉会和并发遍历撞成 OOB。摘链之后规则不再被命中，
+ * 代价是泄漏一个 16 字节的节点 —— 一台机器一次卸载，可以忽略。
+ */
+static int ktool_avdel(int src, int tgt, int cls)
+{
+	struct p4k_avtab *av = p4k_te_avtab();
+	struct p4k_avtab_node **pp, *cur;
+	int hv, n = 0;
+
+	if (!av) {
+		printk(KERN_INFO "ktool: avtab selfcheck FAILED\n");
+		return -EIO;
+	}
+	hv = p4k_hash(av, src, tgt, cls);
+	for (pp = &av->htable[hv]; (cur = *pp) != NULL; pp = &cur->next) {
+		if (cur->key.source_type == src &&
+		    cur->key.target_type == tgt &&
+		    cur->key.target_class == cls &&
+		    (cur->key.specified & P4K_AVTAB_ALLOWED)) {
+			smp_wmb();
+			*pp = cur->next;
+			av->nel--;
+			printk(KERN_INFO "ktool: avdel %d->%d:%d off node=%p nel=%u\n",
+			       src, tgt, cls, cur, av->nel);
+			return 0;
+		}
+		if (++n > 400)
+			break;
+	}
+	printk(KERN_INFO "ktool: avdel %d->%d:%d not found\n", src, tgt, cls);
+	return -ENOENT;
+}
+
+/*
+ * 把 p4k_apply_su_rules() 加的东西全部退掉：六条纯新增的摘链，一条原本
+ * 就存在、只是被 OR 过权限的覆盖回原 mask。
+ *
+ * init_shell -> system_prop:property_service 不用管：原策略本来就有 set，
+ * 插入时 OR 上去等于没改。
+ */
+static void p4k_avrestore(void)
+{
+	int r = 0;
+
+	r |= ktool_avdel(p4k_tgt_initshell, p4k_src_app, 8);		/* fd */
+	r |= ktool_avdel(p4k_src_app, p4k_tgt_initshell, 2);		/* process */
+	r |= ktool_avdel(p4k_src_app, p4k_tgt_shelldata, 12);		/* sock_file */
+	r |= ktool_avdel(p4k_shell_type, p4k_su_exec_type, 6);		/* file */
+	r |= ktool_avdel(p4k_tgt_initshell, p4k_shell_type, 8);		/* fd */
+	r |= ktool_avdel(p4k_shell_type, p4k_tgt_shelldata, 12);	/* sock_file */
+
+	ktool_avrule_ex(p4k_src_app, p4k_tgt_shelldata, 7,
+			(u32)p4k_dir_orig_mask, 0);			/* dir */
+
+	printk(KERN_INFO "ktool: avrestore done (del rc=%d)\n", r);
 }
 
 static int ktool_avrule(int src, int tgt, int cls, u32 mask)
@@ -1277,6 +1348,8 @@ static ssize_t ktool_write(struct file *file, const char __user *buf, size_t len
 			return -ENOMEM;
 		commit_creds(new);
 		printk(KERN_INFO "ktool: root current\n");
+	} else if (strncmp(kbuf, "avrestore", 9) == 0) {
+		p4k_avrestore();
 	} else if (strncmp(kbuf, "wfind16 ", 8) == 0) {
 		int pid = 0;
 		unsigned int pat = 0;
