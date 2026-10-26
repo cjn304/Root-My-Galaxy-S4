@@ -110,13 +110,17 @@ make KDIR=/path/to/kernel_i9500 CROSS_COMPILE=arm-none-linux-gnueabihf-
 
 #### 内核源码
 
-三星的开源发布站已经不再提供这一代的包，所以任选一份 3.4.5 的 GT-I9500 树，并把它的结构体布局
-当作未经证实：
+三星的开源发布站已经不再提供这一代的包，没有唯一正确的树。现有这几份，各有各的用处：
 
-- 本仓库编译时用的：https://github.com/somadsul/kernel_i9500
-- LineageOS 的树：https://github.com/LineageOS/android_kernel_samsung_exynos5410
-- 一个并入了三星 `I9500XXUHQD1` 的社区 fork —— 与本机的 `ZSSHQD1` 同代，更接近，但仍不等于证明：
-  https://github.com/exynos5410/android_kernel_samsung_exynos5410
+| 树 | 内核版本 | 用途 |
+|---|---|---|
+| [somadsul/kernel_i9500](https://github.com/somadsul/kernel_i9500) | 3.4.5 | 本仓库编译时用的；`EXTRAVERSION` 被改成 `-6264821` 才装得进去 |
+| [LineageOS/android_kernel_samsung_exynos5410](https://github.com/LineageOS/android_kernel_samsung_exynos5410)（`cm-11.0-old`） | 3.4.5 | 基础版本与上面一致，可以顶替 |
+| [exynos5410/android_kernel_samsung_exynos5410](https://github.com/exynos5410/android_kernel_samsung_exynos5410)（`cm-14.1`） | **3.4.67** | 只能当参考 —— 领先 62 个 stable 版本，vermagic 对不上，布局也动了不少 |
+
+第三份另有一层价值：它有一条提交把三星的 `I9500XXUHQD1` 合了进来，而本机是 `ZSSHQD1`
+（都以 `HQD1` 结尾，本机内核编译时间 2017-04-01，同一个月）。所以它值得**读**，
+但不适合编给一台 3.4.5 的设备用。
 
 这几份都不是固件本身编译时用的那棵树。第一份和设备之间 `cred` 偏移差 16 字节，这正是
 「每个偏移都要量、不要算」的全部理由。

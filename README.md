@@ -119,17 +119,22 @@ that uses them silently does nothing (or half its job).
 #### Kernel sources
 
 Samsung's open source site no longer publishes packages for this generation, so
-pick any 3.4.5 GT-I9500 tree and treat its struct layouts as unverified:
+there is no canonical tree to point at. What exists, and what each is good for:
 
-- what this repository was built against: https://github.com/somadsul/kernel_i9500
-- LineageOS's own tree: https://github.com/LineageOS/android_kernel_samsung_exynos5410
-- a community fork that merged Samsung's `I9500XXUHQD1` drop — the same build
-  generation as this device's `ZSSHQD1`, so closer, but still not proof:
-  https://github.com/exynos5410/android_kernel_samsung_exynos5410
+| Tree | Kernel | Use |
+|---|---|---|
+| [somadsul/kernel_i9500](https://github.com/somadsul/kernel_i9500) | 3.4.5 | what this repo was built against; `EXTRAVERSION` was edited to `-6264821` so the module would load |
+| [LineageOS/android_kernel_samsung_exynos5410](https://github.com/LineageOS/android_kernel_samsung_exynos5410) (`cm-11.0-old`) | 3.4.5 | same base version as the above, so it can stand in for it |
+| [exynos5410/android_kernel_samsung_exynos5410](https://github.com/exynos5410/android_kernel_samsung_exynos5410) (`cm-14.1`) | **3.4.67** | reference only — 62 stable releases ahead, so vermagic will not match and plenty of layouts moved |
 
-None of these is the tree the firmware itself was compiled from. The `cred`
-offset differs by 16 bytes between the first one and the device, which is the
-whole argument for measuring every offset instead of computing it.
+The third one is interesting for another reason: one of its commits merges
+Samsung's own `I9500XXUHQD1` drop, the same build generation as this device's
+`ZSSHQD1` (both end in `HQD1`; this kernel is dated 2017-04-01, same month).
+That makes it worth reading, not worth compiling into a 3.4.5 device.
+
+None of these is the tree the firmware was compiled from. The `cred` offset
+differs by 16 bytes between the first one and the device, which is the whole
+argument for measuring every offset instead of computing it.
 
 ---
 
