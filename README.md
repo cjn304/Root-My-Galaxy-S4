@@ -106,15 +106,7 @@ sepf  : SEPF_GT-I9500_5.0.1-1_0039
 5. Authorization     /system/xbin/su (fork-based, phh protocol) + Superuser APK
 ```
 
-Three details that decide whether any of this works:
-
 **`kwrite` lies about its length.** Every call returns 0 regardless of outcome. Landing rate over 5 independent tries: 8 B → 5/5, 16 B → 1/5, 32 B → 0/5, 48 B → 0/5, 72 B → 1/5. Hence fixed 8-byte chunks with read-back verification and an undo log. Measured on this device, a single 8-byte read costs 0.9 ms with 2.9 retries on average; a write costs a write plus a read-back, so moving a megabyte takes minutes, not seconds.
-
-**`setenforce 0` is dead on this kernel.** `CONFIG_ALWAYS_ENFORCE` makes `avc_denied()` return `-EACCES` without ever consulting `selinux_enforcing`. The only lever is `permissive_map`.
-
-**Permissive does not retroactively apply.** `AVD_FLAGS_PERMISSIVE` is baked into `avd->flags` at *computation* time. Any triple already cached keeps its old verdict. This is why `enforce` and `flush` call `avc_ss_reset(0)`, and why "permissive is on but remount still fails" happens.
-
-Writing `/sys/fs/selinux/load` is never done: it triggers TIMA integrity measurement (`Tl_TIMA_PKM: ret = -1`) and the process wedges in D state. All policy edits happen in memory instead.
 
 ### The 8 avtab rules
 
@@ -478,8 +470,6 @@ computed from scratch.
 - **KNOXout** (Lev Aronsky, Viral Security Group) — what Samsung's TIMA and RKP actually intercept.
   This is where the "never write `selinuxfs`" rule came from, before it was confirmed on device
 - phh's Superuser — su protocol and APK side
-- Linux kernel SELinux subsystem (NSA; Stephen Smalley and contributors) — the `security/selinux/`
-  internals (`avtab`, `policydb`, `avc`) that this project edits in memory at runtime
 
 Substantial parts of the code and prose here were written with AI assistance. Every address,
 offset, permission mask and `verified` claim was checked against a real device: the experiments,

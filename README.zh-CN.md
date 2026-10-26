@@ -103,22 +103,10 @@ sepf  : SEPF_GT-I9500_5.0.1-1_0039
 5. 授权              /system/xbin/su（fork 版，phh 协议）+ Superuser APK
 ```
 
-三个决定这套东西能不能成立的细节：
-
 **`kwrite` 会谎报长度。** 无论结果如何，每次调用都返回 0。5 次独立测试的落地率：8 B → 5/5，
 16 B → 1/5，32 B → 0/5，48 B → 0/5，72 B → 1/5。所以固定按 8 字节分块、写后读回校验，并保留
 undo 日志。本机实测：单次 8 字节读耗时 0.9 ms，平均重试 2.9 次；一次写等于一次写加一次读回，
 所以搬 1 MB 是分钟级，不是秒级。
-
-**`setenforce 0` 在这个内核上是死的。** `CONFIG_ALWAYS_ENFORCE` 让 `avc_denied()` 直接返回
-`-EACCES`，根本不看 `selinux_enforcing`。唯一的杠杆是 `permissive_map`。
-
-**permissive 不会追溯生效。** `AVD_FLAGS_PERMISSIVE` 是在**计算**权限时烤进 `avd->flags` 的。
-已经缓存过的三元组继续用自己的旧判定。这就是 `enforce` 和 `flush` 都要调 `avc_ss_reset(0)` 的
-原因，也是"permissive 明明开着，remount 还是被拒"的来源。
-
-全程不写 `/sys/fs/selinux/load`：那会触发 TIMA 的内核完整性度量（`Tl_TIMA_PKM: ret = -1`），
-进程直接卡死 D 状态。所有策略改动都在内存里完成。
 
 ### 8 条 avtab 规则
 
@@ -467,8 +455,6 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 - **KNOXout**（Lev Aronsky，Viral Security Group）—— 三星 TIMA 与 RKP 究竟拦什么。
   「永远不写 `selinuxfs`」这条规则就来自这里，之后才在设备上得到确认
 - phh's Superuser —— su 协议与 APK 侧
-- Linux 内核 SELinux 子系统（NSA；Stephen Smalley 及贡献者）—— 本项目在运行时直接改写的
-  `security/selinux/` 内部结构（`avtab`、`policydb`、`avc`）
 
 本仓库的代码和文字有相当一部分是在 AI 协助下完成的。但每一个地址、偏移、权限掩码和 `verified`
 声明都在真机上核对过：实验、失败分析和"保留什么"的判断是人做的。
