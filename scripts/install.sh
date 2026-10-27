@@ -189,6 +189,16 @@ install_persistent() {
 		echo "   module already loaded, nothing to activate"
 	fi
 
+	# Default: give the su domain read/write on app private data, the way Magisk
+	# does. Without it a file manager can only reach app data through
+	# 'ktool appwrite', one path at a time. See the README for what this costs.
+	if [ "$(q '[ -f /data/local/tmp/ktool_notrust ] && echo 1 || echo 0')" = 1 ]; then
+		echo "   trust: skipped (/data/local/tmp/ktool_notrust present)"
+	else
+		adb shell '/data/local/tmp/ktool_new trust on' 2>&1 | grep -v '^$' ||
+			echo "   trust on failed"
+	fi
+
 	echo "== [6/6] done: ktool + su + module installed (persistent) =="
 	echo "   root survives reboots via /system/etc/init.sec.boot.sh"
 }
@@ -310,6 +320,10 @@ uninstall() {
 	'"
 
 	echo "== [4/6] unload the module =="
+	# Undo trust first: it needs /dev/ktool, which disappears with the module.
+	# Leaving the four rules in place would keep root able to read app data until
+	# the reboot, which contradicts what 'uninstall' means.
+	adb shell "$KT trust off" 2>&1 | grep -v '^$' || true
 	# rmmod goes through capable(CAP_SYS_MODULE), and the shell domain is not
 	# granted sys_module — it works only because the permissive window opened in
 	# step 1 is still open. That is the whole reason this step is here and not

@@ -489,8 +489,10 @@ that app's uid returns 0, and a new file created under `com.android.settings` co
 After `trust off` the same `cp` returns `Permission denied` again. `permissive_map` is never
 touched; `getenforce` reads `Enforcing` throughout.
 
-`trust` does not survive a reboot. To have the boot hook re-apply it, create
-`/data/local/tmp/ktool_trust` — the block runs `ktool trust on` only when that file exists.
+`trust` is **on by default**: `install.sh` turns it on at the end, and the boot hook re-applies it
+on every boot. Opt out with `touch /data/local/tmp/ktool_notrust` (the hook then skips it) or with
+`ktool trust off` for the current session. `install.sh -u` runs `trust off` before unloading the
+module, so an uninstall does not leave root able to read app data until the next boot.
 
 ### File / shell
 

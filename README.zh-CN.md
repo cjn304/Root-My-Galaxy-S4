@@ -465,8 +465,9 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 `trust off` 之后同一个 `cp` 立刻变回 `Permission denied`。全程不碰 `permissive_map`，
 `getenforce` 一直是 `Enforcing`。
 
-`trust` 不跨重启。想让开机脚本自动加上，创建 `/data/local/tmp/ktool_trust` 即可 ——
-标记块只在那个文件存在时才执行 `ktool trust on`。
+`trust` **默认就是开的**：`install.sh` 最后会执行一次，开机块每次开机也会重新加上。
+不想要就 `touch /data/local/tmp/ktool_notrust`（开机块会跳过），或者当次 `ktool trust off`。
+`install.sh -u` 会在卸载模块之前先 `trust off`，所以卸载不会留下"到重启为止 root 还能读 app 数据"的状态。
 
 ### 文件 / shell
 
