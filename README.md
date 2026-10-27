@@ -195,7 +195,7 @@ Insertion details that matter: `policydb + 0x74` is `te_avtab` (htable / nslot /
 
 Every CVE checked against this exact kernel (`3.4.5-6264821`). The table keeps two separate
 columns on purpose: whether the bug is still in the code, and whether a `shell`-uid process can
-actually reach it. Nineteen were checked. One is usable.
+actually reach it. Twenty were checked. One is usable.
 
 | CVE | Subsystem | Vulnerability | Exploitability | Basis |
 |---|---|---|---|---|
@@ -213,6 +213,7 @@ actually reach it. Nineteen were checked. One is usable.
 | CVE-2016-3951 | USB usbnet | ABSENT | — | `CONFIG_USB_USBNET` not set. |
 | CVE-2017-11176 | `mq_notify` | ABSENT | — | `CONFIG_POSIX_MQUEUE` not set. |
 | CVE-2017-6074 | DCCP | ABSENT | — | `CONFIG_IP_DCCP` not set. |
+| CVE-2026-64560 | posix-cpu-timers, non-leader `exec()` race | ABSENT | — | Introduced in 5.7. No `switch_leader()` in this tree or in the device's `/proc/kallsyms`, and `posix_cpu_timer_del()` reads `p->sighand` under `tasklist_lock` — the same lock `release_task()` holds across `__exit_signal()` — so the window the CVE needs does not exist. The worst case here is the `BUG_ON` panic, not a UAF. |
 | CVE-2019-2181 | binder | ABSENT | — | Not introduced in this tree. |
 | CVE-2020-0041 | binder | ABSENT | — | Not introduced in this tree. |
 | CVE-2020-0009 | ashmem prot | BY DESIGN | — | Intended behaviour on this kernel, not a vulnerability. |
