@@ -226,6 +226,23 @@ shell         -> shell_data   : sock_file { create write setattr unlink }
 这个 build 上 `dmesg` 从 `shell` 就能读 —— 但触发路径会在 `pi_lock` 临界区里 BUG，线程带着真锁  
 死掉，约 27 秒后 softlockup，整机 panic。不是没有泄漏，是这个泄漏自杀。
 
+### 怎么筛一条新 CVE
+
+advisory 里的版本区间是写给「还在收修复的分支」的，对一个 3.4 内核几乎没有参考价值。真正决定的是四个问题：
+
+1. **这份代码在这里存在吗？** `switch_leader()`、`binderfs`、`binder_netlink_report()`、`nf_tables`
+   都是 3.4 之后才有的东西，它们的 CVE 不管区间怎么写都套不上。查源码树，也查 `/proc/kallsyms` ——
+   符号数为 0 就能给运行中的内核下定论。
+2. **编进去了吗？** 本机 `CONFIG_NETFILTER_XT_TARGET_CT` 没开，`/proc/kallsyms` 里也没有
+   `xt_ct_target`，所以 CVE-2026-23391 虽然写着「3.4.1 起受影响」，在这台机器上根本走不到。
+3. **调用者够得着吗？** netfilter 类都要 `CAP_NET_ADMIN`；本策略只给 `sec-ril`、`vold`、`ppp`
+   这些守护进程，永远不给 `shell` 和 `untrusted_app`。
+4. **它给什么原语？** 重分配不可控的 UAF 就是一次 panic，不是原语。
+
+按这四条过一遍 2024–2026，剩下的几乎没有：真正能追到 3.4 的，是 netfilter 的模板 / cttimeout
+（配置关或要 capability）、这台手机根本没有的硬件驱动（CAN、RapidIO、HID）、以及后来才有的
+binder 特性（tmpref、freeze、binderfs）。所以这台设备上能用的入口，仍然是一个 2015 年的 pipe bug。
+
 ### GhostLock 可用性
 
 决定这条链能不能用的，不是一次再平衡会碰几个节点，而是内核在解引用之前**会不会校验**这个节点。

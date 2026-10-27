@@ -236,6 +236,26 @@ The `WARN`-`%p` channel does print real kernel stack addresses, and `dmesg` is r
 thread dies still holding a real lock and softlockup panics about 27 seconds later. Not a missing
 leak; a self-defeating one.
 
+### Screening a new CVE
+
+Advisory version ranges are written for the branches that still receive fixes, so they say little
+about a 3.4 kernel. Four questions decide it instead:
+
+1. **Does the code exist here?** `switch_leader()`, `binderfs`, `binder_netlink_report()` and
+   `nf_tables` are all post-3.4 inventions; their CVEs cannot apply whatever the range says. Grep the
+   tree, and `/proc/kallsyms` — a symbol count of 0 settles it for the running kernel.
+2. **Is it compiled in?** `CONFIG_NETFILTER_XT_TARGET_CT` is not set on this build and
+   `/proc/kallsyms` has no `xt_ct_target`, so CVE-2026-23391 is unreachable even though its advisory
+   range starts at 3.4.1.
+3. **Can the caller get there?** Every netfilter CVE needs `CAP_NET_ADMIN`; this policy grants it to
+   `sec-ril`, `vold`, `ppp` and similar daemons, never to `shell` or `untrusted_app`.
+4. **What does it hand over?** A UAF whose reallocation cannot be shaped is a panic, not a primitive.
+
+Run over 2024-2026 that leaves almost nothing. What genuinely reaches back to 3.4 is netfilter
+template / cttimeout code (config off, or capability-gated), drivers for hardware this phone does not
+have (CAN, RapidIO, HID), and binder features that arrived later (tmpref, freeze, binderfs). Which is
+why the working entry on this device is still a 2015 pipe bug.
+
 ### GhostLock availability
 
 What decides whether this chain works is not how many nodes a rebalance touches. It is whether the
