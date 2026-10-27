@@ -87,7 +87,7 @@ static const struct ktool_target ktool_targets[] = {
 		.perm_bit = 986,	/* init_shell（sepolicy_parse.py 数出来的） */
 
 		.verified = 1,
-		.note = "本机验证：root/ctx/ish/门禁/permissive/enforce/appwrite/apprm 全通",
+		.note = "本机验证：root/ctx/ish/门禁/permissive/enforce/appwrite/apprm/trust 全通",
 	},
 	/*
 	 * 加新目标：按 P4.29 推 6 个 [A] 地址 + 核对 3 个 [B] 偏移，

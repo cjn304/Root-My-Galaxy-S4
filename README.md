@@ -469,9 +469,28 @@ Global: `ktool [-t <sec>] <command> ...` — `-t/--timeout` caps total retry tim
 | `enforce [--noflush]` | Clear `permissive_map` + restore `modprobe_path` + flush AVC. It only undoes the in-memory permissive window — it does not uninstall anything. `--noflush` does **not** actually restore enforcement |
 | `appwrite <src\|-> <dst>` | Write into another app's private data. The source is read as `init_shell` (any path), then the process is switched to the target directory's owner + `untrusted_app` in one step: the DAC key comes from a direct `cred->fsuid` write inside the module, the SELinux key from the domain switch. Works on `app_data_file` only — system apps are `system_app_data_file` and return 4 |
 | `apprm [-r] [-f] <path>...` | Same identity trick, for deleting. Nothing is printed after the switch — writing to the calling shell's pipe is itself a permission check that `untrusted_app` fails, and this kernel's audit path oopses on the denial, so success is only visible in the exit code |
+| `trust [on\|off]` | Insert / remove four curated avtab rules — `init_shell` → `app_data_file` and `system_app_data_file`, `file` and `dir`. With them in place plain `cp`, `rm`, `chmod` and `tar` work on app private data, so file managers and backup tools behave like they do on a Magisk device. Still Enforcing; `trust off` restores `app_data_file:dir` to `0x100020` and unlinks the other three |
 | `flush [-y]` | AVC flush only; `-y` skips the 3 s warning |
 | `patch` / `unpatch` | Apply / revert the KNOX `sys_execve` branch patch |
 | `setsid <sid\|init_shell> <cmd...>` | Rewrite the current `cred->security->sid`, then exec. Rescue path when the AVC cache is deadlocked |
+
+Two ways to reach app private data, and they trade off differently:
+
+- `appwrite` / `apprm` switch **one process** to the target's owner + `untrusted_app`, touch one
+  path, and exit. Nothing else on the device gains anything. Works on `app_data_file` only.
+- `trust on` gives the **whole `init_shell` domain** read/write on `app_data_file` and
+  `system_app_data_file`. Any `su` caller can then do it — which is what tools like Titanium
+  Backup need — at the cost of root no longer being fenced off from app data until `trust off`
+  or a reboot. It is the same idea as Magisk's `allow magisk * * *`, four types narrower.
+
+Measured on this device: with `trust on`, `cp` into another app's directory returns 0, `chown` to
+that app's uid returns 0, and a new file created under `com.android.settings` comes out labelled
+`system_app_data_file` — the label follows the parent directory, so the app itself still reads it.
+After `trust off` the same `cp` returns `Permission denied` again. `permissive_map` is never
+touched; `getenforce` reads `Enforcing` throughout.
+
+`trust` does not survive a reboot. To have the boot hook re-apply it, create
+`/data/local/tmp/ktool_trust` — the block runs `ktool trust on` only when that file exists.
 
 ### File / shell
 

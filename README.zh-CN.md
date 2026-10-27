@@ -447,9 +447,26 @@ insmod ktool_mod.ko av_app_type=809 av_initshell_type=986 av_shelldata_type=200 
 | `enforce [--noflush]` | 清 `permissive_map` + 还原 `modprobe_path` + flush AVC。它只撤销内存里的 permissive 窗口 —— 不会卸载任何东西。`--noflush` 并**没有**真正恢复强制 |
 | `appwrite <src\|-> <dst>` | 写进别的 app 的私有数据。源文件以 `init_shell` 读（任意路径），然后一步切到「目标目录 owner + `untrusted_app`」：DAC 钥匙来自模块里直写 `cred->fsuid`，SELinux 钥匙来自换域。只对 `app_data_file` 有效 —— 系统应用是 `system_app_data_file`，会返回 4 |
 | `apprm [-r] [-f] <path>...` | 同一套身份，用于删除。切域之后不再输出任何东西 —— 往调用方的管道写本身就是一次权限检查，`untrusted_app` 过不了，而本内核的审计路径在拒绝时会 oops，所以成功与否只看退出码 |
+| `trust [on\|off]` | 插入 / 摘除四条精选 avtab 规则 —— `init_shell` → `app_data_file` 与 `system_app_data_file`，`file` 和 `dir` 各一条。规则在位时，普通的 `cp`、`rm`、`chmod`、`tar` 就能直接操作 app 私有数据，文件管理器和备份工具的表现和 Magisk 机器上一样。全程 Enforcing；`trust off` 把 `app_data_file:dir` 还原成 `0x100020`，另外三条摘链 |
 | `flush [-y]` | 只清 AVC 缓存；`-y` 跳过 3 秒警告 |
 | `patch` / `unpatch` | 打上 / 撤销 KNOX 的 `sys_execve` 分支补丁 |
 | `setsid <sid\|init_shell> <cmd...>` | 改写当前 `cred->security->sid` 然后 exec。AVC 缓存死锁时的救援通道 |
+
+访问 app 私有数据有两条路，代价不同：
+
+- `appwrite` / `apprm` 把**一个进程**切成「目标目录 owner + `untrusted_app`」，动一个路径就退出，
+  设备上其他东西一点没变。只对 `app_data_file` 有效。
+- `trust on` 给**整个 `init_shell` 域**放开 `app_data_file` 和 `system_app_data_file` 的读写。
+  之后任何 `su` 调用者都能直接操作 —— 钛备份这类工具要的就是这个 —— 代价是 root 不再被挡在
+  app 数据之外，直到 `trust off` 或重启。思路和 Magisk 的 `allow magisk * * *` 相同，只是窄了四类。
+
+本机实测：`trust on` 之后 `cp` 进别的 app 目录返回 0，`chown` 成那个 app 的 uid 返回 0，
+在 `com.android.settings` 下新建的文件标签是 `system_app_data_file`（标签跟随父目录，app 自己仍读得到）。
+`trust off` 之后同一个 `cp` 立刻变回 `Permission denied`。全程不碰 `permissive_map`，
+`getenforce` 一直是 `Enforcing`。
+
+`trust` 不跨重启。想让开机脚本自动加上，创建 `/data/local/tmp/ktool_trust` 即可 ——
+标记块只在那个文件存在时才执行 `ktool trust on`。
 
 ### 文件 / shell
 

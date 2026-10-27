@@ -1978,6 +1978,56 @@ static int kt_cmd_apprm(int argc, char **argv)
 	_exit(rc);
 }
 
+/*
+ * trust [on|off] —— 把 su 交付的 init_shell 域放宽到能读写 app 私有数据
+ *
+ * 这是相比逐次 appwrite 的"往右走一步"：规则一插，任何 su 调用者（cp、rm、
+ * tar、钛备份这类工具）都能直接操作 app 数据，不再需要按文件切域。代价是
+ * 整个 init_shell 域都放开，直到 trust off 或重启 —— 和 Magisk 的做法同源，
+ * 只是范围窄得多（只加 app_data_file / system_app_data_file 两类）。
+ *
+ * 全程 Enforcing：不写 permissive_map，模块插完规则自己 avc_ss_reset(0)。
+ */
+static int kt_cmd_trust(int argc, char **argv)
+{
+	const char *w;
+	int fd, n;
+
+	if (argc == 2 || (argc == 3 && !strcmp(argv[2], "on")))
+		w = "trustroot on";
+	else if (argc == 3 && !strcmp(argv[2], "off"))
+		w = "trustroot off";
+	else {
+		fprintf(stderr, "usage: trust [on|off]\n");
+		return 1;
+	}
+
+	/* /dev/ktool 的门禁认 uid0，自己提权（和 appwrite 一样） */
+	if (getuid() != 0) {
+		fflush(stdout);
+		if (do_root() != 0) {
+			fprintf(stderr, "ktool: 提权失败（模块没加载？）\n");
+			return 3;
+		}
+	}
+
+	fd = open("/dev/ktool", O_WRONLY);
+	if (fd < 0) {
+		fprintf(stderr, "ktool: open /dev/ktool: %s（模块没加载？）\n",
+			strerror(errno));
+		return 3;
+	}
+	n = (int)write(fd, w, strlen(w));
+	close(fd);
+	if (n != (int)strlen(w)) {
+		fprintf(stderr, "trust: write failed (%d)\n", n);
+		return 3;
+	}
+	printf("trust: %s（Enforcing 不变；dmesg | grep trustroot 看结果）\n",
+	       w + 10);
+	return 0;
+}
+
 static int do_patch_exec(int on)
 {
 	unsigned char b[8];
@@ -2277,6 +2327,7 @@ int main(int argc, char **argv)
 			"usage: %s [-t sec] target | dump <hexaddr> <len> | root | sh | permissive |\n"
 			"          patch | unpatch | enforce [--noflush] | flush | pwn [cmd]\n"
 			"          appwrite <src|-> <dst> | apprm [-r] [-f] <path>...\n"
+			"          trust [on|off]    放宽 init_shell 读写 app 私有数据\n"
 			"          kread_file <addr> <len> <out> [-r] | kwrite_file <in> <addr> [-n]\n"
 			"          undo                              用 undo 日志还原上次写入\n"
 			"          scan <start> <len> <pat|s:text> [max]\n"
@@ -2400,6 +2451,8 @@ static int ktool_dispatch(int argc, char **argv)
 		return 0;
 	}
 
+	if (!strcmp(argv[1], "trust"))
+		return kt_cmd_trust(argc, argv);
 	if (!strcmp(argv[1], "appwrite"))
 		return kt_cmd_appwrite(argc, argv);
 	if (!strcmp(argv[1], "apprm"))
@@ -3873,6 +3926,7 @@ static void kt_repl_help(void)
 	"  sh                              打 patch + 切 init_shell 后给 shell\n"
 	"  boot <ko>                       bootmode=2 + permissive + insmod\n"
 	"  appwrite <src|-> <dst>          借目标目录 owner 的身份+域写文件\n"
+	"  trust [on|off]                  给 init_shell 补/撤 app 数据读写规则\n"
 	"  apprm [-r] [-f] <path>...       同上，删除；切域后不再输出任何东西\n"
 	"  repl                            交互会话（别名 shell / -i）\n"
 	"  quit | exit                     退出\n");

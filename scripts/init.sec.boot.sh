@@ -122,6 +122,16 @@ cat /proc/deferred_initcalls
       # 看起来是 Enforcing，实际旧的三元组仍按 permissive 放行。
       echo "KT_ENFORCE_FAIL rc=$enforce_rc" > /dev/kmsg
     fi
+
+    # 可选：把 su 交付的 init_shell 放宽到能读写 app 私有数据。
+    # 钛备份这类工具需要它；不需要就别建这个标记文件（默认关）。
+    # 撤销：删掉标记文件并重启，或当次手动 /system/bin/ktool trust off。
+    if [ -f /data/local/tmp/ktool_trust ]; then
+      /system/bin/ktool trust on
+      echo "trust_rc=$?"
+    else
+      echo "trust=off (no /data/local/tmp/ktool_trust)"
+    fi
   else
     # 模块没起来就别假装收口成功：permissive 还开着。
     echo "KT_NO_MODULE: insmod failed, permissive left ON" > /dev/kmsg

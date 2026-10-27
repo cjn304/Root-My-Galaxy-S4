@@ -180,6 +180,7 @@ static int ktool_allow(const char *kbuf)
 	int priv = !strncmp(kbuf, "ish", 3) || !strncmp(kbuf, "ctx ", 4) ||
 		   !strncmp(kbuf, "avrule", 6) || !strncmp(kbuf, "avset", 5) ||
 		   !strncmp(kbuf, "avcflush", 8) || !strncmp(kbuf, "avrestore", 9) ||
+		   !strncmp(kbuf, "trustroot", 9) ||
 		   !strncmp(kbuf, "warntest", 8) ||
 		   !strncmp(kbuf, "bugtest", 7) || !strncmp(kbuf, "waiter ", 7) ||
 		   !strncmp(kbuf, "fixlbl", 6) || !strncmp(kbuf, "lbldbg", 6) ||
@@ -199,6 +200,7 @@ static int ktool_allow(const char *kbuf)
 	 */
 	if ((!strncmp(kbuf, "ctx ", 4) || !strncmp(kbuf, "avrule", 6) ||
 	     !strncmp(kbuf, "avset", 5) ||
+	     !strncmp(kbuf, "trustroot", 9) ||
 	     !strncmp(kbuf, "avcflush", 8) ||
 	     !strncmp(kbuf, "warntest", 8) || !strncmp(kbuf, "bugtest", 7) ||
 	     !strncmp(kbuf, "waiter ", 7) || !strncmp(kbuf, "fixlbl", 6) ||
@@ -901,6 +903,93 @@ static int ktool_avcflush(void)
 	return 0;
 }
 
+/*
+ * trustroot —— 把 root 域放宽到能读写 app 私有数据
+ *
+ * 这是"往右走一步"：比逐次 ctx 宽（su 交付的 init_shell 直接就能读写
+ * —— 任何 cp/rm/tar 都能用，钛备份这类工具才工作得起来），
+ * 但比 Magisk 的 allow magisk * * * 窄得多 —— 只加 app_data_file 和
+ * system_app_data_file 这两类，别的类型一律不动。
+ *
+ * 三个前提：
+ *   1. 不碰 permissive_map，全程 Enforcing；
+ *   2. 只作用于 init_shell（su 交付的域），shell（uid 2000）不受影响；
+ *   3. 插完要 avc_ss_reset(0)，否则之前被判 deny 的三元组一直留在缓存里
+ *      —— 和 permissive 那次"清了 map 但还是放行"是同一个坑。
+ *
+ * off 不依赖内存里的快照，按本机原版策略的已知值还原：
+ *   app_data_file:dir  原值是 0x100020（search|setattr）
+ *   app_data_file:file 原策略没有这条 → 摘链
+ *   system_app_data_file 两条都没有 → 摘链
+ * 这样即使中途 rmmod/insmod（规则留在 policydb，模块状态清零）也能关掉。
+ *
+ * 摘链一律不 kfree：avtab 遍历不加锁，free 会和并发查找撞成 OOB。
+ */
+#define P4K_T_APP_DATA		188	/* app_data_file */
+#define P4K_T_SYSAPP_DATA	403	/* system_app_data_file */
+#define P4K_APPD_FILE_MASK	0x101E7F	/* ioctl read write create getattr setattr lock append unlink link rename open */
+#define P4K_APPD_DIR_MASK	0x7E1C3F	/* 上述 + add_name remove_name search rmdir reparent */
+#define P4K_APPD_DIR_ORIG	0x100020	/* 原策略：search|setattr */
+
+/* 查 (src,tgt,cls) 的 ALLOWED 节点掩码；返回 1 表示存在 */
+static int p4k_find_mask(struct p4k_avtab *av, int src, int tgt, int cls, u32 *out)
+{
+	int hv = p4k_hash(av, src, tgt, cls);
+	struct p4k_avtab_node *cur;
+	int n = 0;
+
+	for (cur = av->htable[hv]; cur; cur = cur->next) {
+		if (cur->key.source_type == src &&
+		    cur->key.target_type == tgt &&
+		    cur->key.target_class == cls &&
+		    (cur->key.specified & P4K_AVTAB_ALLOWED)) {
+			*out = cur->datum.data;
+			return 1;
+		}
+		if (++n > 200)
+			break;
+	}
+	return 0;
+}
+
+static void p4k_trustroot(int on)
+{
+	struct p4k_avtab *av = p4k_te_avtab();
+	u32 old = 0;
+
+	if (!av) {
+		printk(KERN_INFO "ktool: trustroot: avtab unavailable\n");
+		return;
+	}
+
+	if (on) {
+		p4k_find_mask(av, p4k_tgt_initshell, P4K_T_APP_DATA, 7, &old);
+		ktool_avrule(p4k_tgt_initshell, P4K_T_APP_DATA, 7,
+			     P4K_APPD_DIR_MASK);
+		ktool_avrule(p4k_tgt_initshell, P4K_T_APP_DATA, 6,
+			     P4K_APPD_FILE_MASK);
+		ktool_avrule(p4k_tgt_initshell, P4K_T_SYSAPP_DATA, 6,
+			     P4K_APPD_FILE_MASK);
+		ktool_avrule(p4k_tgt_initshell, P4K_T_SYSAPP_DATA, 7,
+			     P4K_APPD_DIR_MASK);
+		printk(KERN_INFO
+		       "ktool: trustroot ON (dir old=%#x/%#x, file+sysapp added)\n",
+		       old, old | P4K_APPD_DIR_MASK);
+	} else {
+		ktool_avrule_ex(p4k_tgt_initshell, P4K_T_APP_DATA, 7,
+				P4K_APPD_DIR_ORIG, 0);
+		if (ktool_avdel(p4k_tgt_initshell, P4K_T_APP_DATA, 6))
+			printk(KERN_INFO "ktool: trustroot: app_data file already gone\n");
+		if (ktool_avdel(p4k_tgt_initshell, P4K_T_SYSAPP_DATA, 6))
+			printk(KERN_INFO "ktool: trustroot: sysapp file already gone\n");
+		if (ktool_avdel(p4k_tgt_initshell, P4K_T_SYSAPP_DATA, 7))
+			printk(KERN_INFO "ktool: trustroot: sysapp dir already gone\n");
+		printk(KERN_INFO "ktool: trustroot OFF (dir back to %#x)\n",
+		       P4K_APPD_DIR_ORIG);
+	}
+	ktool_avcflush();
+}
+
 
 /*
  * ish — 把「当前进程」切成 uid 0 + u:r:init_shell:s0
@@ -1448,6 +1537,13 @@ static ssize_t ktool_write(struct file *file, const char __user *buf, size_t len
 		ret = ktool_avrule(a, b, c, m);
 		if (ret)
 			return ret;
+	} else if (strncmp(kbuf, "trustroot ", 10) == 0) {
+		if (strncmp(kbuf + 10, "on", 2) == 0)
+			p4k_trustroot(1);
+		else if (strncmp(kbuf + 10, "off", 3) == 0)
+			p4k_trustroot(0);
+		else
+			return -EINVAL;
 	} else if (strncmp(kbuf, "avcflush", 8) == 0) {
 		int ret = ktool_avcflush();
 		if (ret)
